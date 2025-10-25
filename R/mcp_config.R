@@ -37,10 +37,14 @@ add_to_mcp_config <- function() {
 #' @export
 remove_from_mcp_config <- function() {
   path <- file.path(getwd(), ".mcp.json")
-  if (!file.exists(path)) return(invisible(FALSE))
+  if (!file.exists(path)) {
+    return(invisible(FALSE))
+  }
 
   config <- jsonlite::fromJSON(path, simplifyVector = FALSE)
-  if (is.null(config$mcpServers$rstudio)) return(invisible(FALSE))
+  if (is.null(config$mcpServers$rstudio)) {
+    return(invisible(FALSE))
+  }
 
   config$mcpServers$rstudio <- NULL
 

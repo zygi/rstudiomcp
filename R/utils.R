@@ -3,11 +3,15 @@
 #' Detect variable assignments in R code (supports <-, =, ->, <<-, assign())
 #' @keywords internal
 detect_assignments <- function(code_text) {
-  expr <- tryCatch(parse(text = code_text), error = function(e) return(character(0)))
+  expr <- tryCatch(parse(text = code_text), error = function(e) {
+    return(character(0))
+  })
   assignments <- character(0)
 
   walk_expr <- function(e) {
-    if (!is.call(e)) return()
+    if (!is.call(e)) {
+      return()
+    }
 
     op <- as.character(e[[1]])
 

@@ -41,186 +41,369 @@ def get_server_url():
     return "http://127.0.0.1:16731/"
 
 
-@pytest_asyncio.fixture(scope="session")
-async def mcp_session():
-    """Fixture that provides an MCP client session connected to RStudio"""
+async def get_session():
+    """Helper to create an MCP session"""
     url = get_server_url()
+    return streamablehttp_client(url)
 
-    async with streamablehttp_client(url) as (read_stream, write_stream, _):
+
+def extract_doc_id_from_insert(result_text):
+    """Extract document ID from create_untitled_document result"""
+    return result_text.split("ID:")[1].strip()
+
+
+async def cleanup_document(session, doc_id):
+    """Close a document without saving
+
+    Args:
+        session: MCP client session
+        doc_id: Document ID to close
+    """
+    await session.call_tool("eval_r", {
+        "code": f'rstudioapi::documentClose(id = "{doc_id}", save = FALSE)',
+        "allow_reassign": True
+    })
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def clean_environment():
+    """Clean the R environment and close all documents before each test"""
+    async with await get_session() as (read_stream, write_stream, _):
         async with ClientSession(read_stream, write_stream) as session:
-            # Initialize
             await session.initialize()
-
-            # Clean environment before tests
+            # Remove all objects from global environment
             await session.call_tool("eval_r", {
                 "code": "rm(list = ls(all.names = TRUE))",
                 "allow_reassign": True
             })
-
-            yield session
+            # Close all open documents
+            await session.call_tool("eval_r", {
+                "code": """
+                tryCatch({
+                  # Get all document IDs and close them
+                  doc_ids <- sapply(rstudioapi::getSourceEditorContext(), function(ctx) ctx$id)
+                  for (doc_id in doc_ids) {
+                    if (!is.na(doc_id) && doc_id != "#console") {
+                      rstudioapi::documentClose(id = doc_id, save = FALSE)
+                    }
+                  }
+                }, error = function(e) invisible())
+                """,
+                "allow_reassign": True
+            })
+    yield
+    # Teardown: could clean up here if needed
 
 
 @pytest.mark.asyncio
-async def test_list_tools(mcp_session):
+async def test_list_tools():
     """Test listing available tools"""
-    tools = await mcp_session.list_tools()
-    assert len(tools.tools) == 12
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            tools = await session.list_tools()
+            assert len(tools.tools) == 13
 
-    tool_names = [tool.name for tool in tools.tools]
-    expected_tools = [
-        "eval_r", "list_environments", "list_objects", "get_object",
-        "get_console_history", "list_open_documents", "get_document_contents",
-        "insert_text", "replace_text_range", "source_document",
-        "get_current_plot", "get_viewer_content"
-    ]
-    for expected in expected_tools:
-        assert expected in tool_names
+            tool_names = [tool.name for tool in tools.tools]
+            expected_tools = [
+                "eval_r", "list_environments", "list_objects", "get_object",
+                "get_console_history", "get_active_document_contents",
+                "create_untitled_document", "open_document_file",
+                "insert_text", "replace_text_range", "source_active_document",
+                "get_current_plot", "get_viewer_content"
+            ]
+            for expected in expected_tools:
+                assert expected in tool_names
 
 
 @pytest.mark.asyncio
-async def test_eval_r_basic(mcp_session):
+async def test_eval_r_basic():
     """Test basic R code execution"""
-    result = await mcp_session.call_tool("eval_r", {
-        "code": "test_var <- 42 + 8"
-    })
-    assert result.content[0].type == "text"
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
 
-    # Verify variable was created
-    result = await mcp_session.call_tool("list_objects", {})
-    assert "test_var" in result.content[0].text
+            result = await session.call_tool("eval_r", {
+                "code": "integration_test_var <- 42 + 8"
+            })
+            assert result.content[0].type == "text"
+
+            # Verify variable was created
+            result = await session.call_tool("list_objects", {})
+            assert "integration_test_var" in result.content[0].text
 
 
 @pytest.mark.asyncio
-async def test_eval_r_allow_reassign_protection(mcp_session):
+async def test_eval_r_allow_reassign_protection():
     """Test that eval_r prevents reassignment by default"""
-    # Create a variable
-    await mcp_session.call_tool("eval_r", {"code": "x <- 10"})
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
 
-    # Try to reassign without permission
-    with pytest.raises(Exception) as exc_info:
-        await mcp_session.call_tool("eval_r", {
-            "code": "x <- 20",
-            "allow_reassign": False
-        })
-    assert "overwrite existing variable" in str(exc_info.value)
+            # Create a variable
+            await session.call_tool("eval_r", {"code": "test_reassign_var <- 10"})
+
+            # Try to reassign without permission
+            with pytest.raises(Exception) as exc_info:
+                await session.call_tool("eval_r", {
+                    "code": "test_reassign_var <- 20",
+                    "allow_reassign": False
+                })
+            assert "overwrite existing variable" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
-async def test_eval_r_allow_reassign_true(mcp_session):
+async def test_eval_r_allow_reassign_true():
     """Test that eval_r allows reassignment with allow_reassign=true"""
-    # Create a variable
-    await mcp_session.call_tool("eval_r", {"code": "y <- 10"})
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
 
-    # Reassign with permission
-    result = await mcp_session.call_tool("eval_r", {
-        "code": "y <- 20",
-        "allow_reassign": True
-    })
-    assert result.content[0].type == "text"
+            # Create a variable
+            await session.call_tool("eval_r", {"code": "test_reassign_ok <- 10"})
+
+            # Reassign with permission
+            result = await session.call_tool("eval_r", {
+                "code": "test_reassign_ok <- 20",
+                "allow_reassign": True
+            })
+            assert result.content[0].type == "text"
 
 
 @pytest.mark.asyncio
-async def test_list_environments(mcp_session):
+async def test_list_environments():
     """Test listing R environments"""
-    result = await mcp_session.call_tool("list_environments", {})
-    envs = result.content[0].text.split('\n')
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
 
-    assert ".GlobalEnv" in envs
-    assert "package:base" in envs
+            result = await session.call_tool("list_environments", {})
+            envs = result.content[0].text.split('\n')
+
+            assert ".GlobalEnv" in envs
+            assert "package:base" in envs
 
 
 @pytest.mark.asyncio
-async def test_list_objects(mcp_session):
+async def test_list_objects():
     """Test listing objects in environment"""
-    # Create some test objects
-    await mcp_session.call_tool("eval_r", {
-        "code": "obj1 <- 1; obj2 <- 2; obj3 <- 3"
-    })
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
 
-    result = await mcp_session.call_tool("list_objects", {})
-    objects = result.content[0].text
+            # Create some test objects
+            await session.call_tool("eval_r", {
+                "code": "obj1 <- 1; obj2 <- 2; obj3 <- 3"
+            })
 
-    assert "obj1" in objects
-    assert "obj2" in objects
-    assert "obj3" in objects
+            result = await session.call_tool("list_objects", {})
+            objects = result.content[0].text
+
+            assert "obj1" in objects
+            assert "obj2" in objects
+            assert "obj3" in objects
 
 
 @pytest.mark.asyncio
-async def test_get_object(mcp_session):
+async def test_get_object():
     """Test getting object details"""
-    # Create a test data frame
-    await mcp_session.call_tool("eval_r", {
-        "code": "test_df <- data.frame(a = 1:3, b = c('x', 'y', 'z'))"
-    })
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
 
-    result = await mcp_session.call_tool("get_object", {"name": "test_df"})
-    obj_text = result.content[0].text
+            # Create a test data frame
+            await session.call_tool("eval_r", {
+                "code": "test_df <- data.frame(a = 1:3, b = c('x', 'y', 'z'))"
+            })
 
-    assert "data.frame" in obj_text
-    assert "3 obs" in obj_text
+            result = await session.call_tool("get_object", {"name": "test_df"})
+            obj_text = result.content[0].text
+
+            assert "data.frame" in obj_text
+            assert "3 obs" in obj_text
 
 
 @pytest.mark.asyncio
-async def test_get_console_history(mcp_session):
+async def test_get_console_history():
     """Test getting console history"""
-    result = await mcp_session.call_tool("get_console_history", {"max_lines": 5})
-    assert result.content[0].type == "text"
-    # History might be empty, just check it doesn't error
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+
+            result = await session.call_tool("get_console_history", {"max_lines": 5})
+            assert result.content[0].type == "text"
+            # History might be empty, just check it doesn't error
 
 
 @pytest.mark.asyncio
-async def test_list_open_documents(mcp_session):
-    """Test listing open documents"""
-    result = await mcp_session.call_tool("list_open_documents", {})
-    assert result.content[0].type == "text"
-    # May show "(no open documents)" or list of documents
+async def test_create_untitled_document():
+    """Test creating a new untitled document"""
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+
+            result = await session.call_tool("create_untitled_document", {
+                "text": "# Test document\nprint('Hello')\n"
+            })
+
+            response_text = result.content[0].text
+            assert "Created new document with ID:" in response_text
+
+            # Extract document ID
+            doc_id = extract_doc_id_from_insert(response_text)
+
+            # Verify it's active and we can read it
+            result = await session.call_tool("get_active_document_contents", {})
+            contents = result.content[0].text
+            assert "# Test document" in contents
+            assert "print('Hello')" in contents
+
+            # Clean up
+            await cleanup_document(session, doc_id)
 
 
 @pytest.mark.asyncio
-async def test_insert_text_create_new(mcp_session):
-    """Test creating a new document with insert_text"""
-    result = await mcp_session.call_tool("insert_text", {
-        "text": "# Test document\nprint('Hello')\n",
-        "create_new": True
-    })
+async def test_insert_text_active_document():
+    """Test inserting text into the active document"""
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
 
-    response_text = result.content[0].text
-    assert "Created new document with ID:" in response_text
+            # Create a document
+            result = await session.call_tool("create_untitled_document", {
+                "text": "# Original content"
+            })
+            doc_id = extract_doc_id_from_insert(result.content[0].text)
 
-    # Extract document ID
-    doc_id = response_text.split("ID:")[1].strip()
+            # Insert more text
+            await session.call_tool("insert_text", {
+                "text": "\nx <- 42"
+            })
 
-    # Verify document appears in list
-    result = await mcp_session.call_tool("list_open_documents", {})
-    assert doc_id in result.content[0].text
+            # Verify content was inserted
+            result = await session.call_tool("get_active_document_contents", {})
+            contents = result.content[0].text
+            assert "# Original content" in contents
+            assert "x <- 42" in contents
 
-
-@pytest.mark.asyncio
-async def test_insert_text_create_new_conflicts_with_file_path(mcp_session):
-    """Test that create_new and file_path cannot be used together"""
-    with pytest.raises(Exception) as exc_info:
-        await mcp_session.call_tool("insert_text", {
-            "text": "test",
-            "create_new": True,
-            "file_path": "/some/path.R"
-        })
-    assert "Cannot specify both" in str(exc_info.value)
+            # Clean up
+            await cleanup_document(session, doc_id)
 
 
 @pytest.mark.asyncio
-async def test_get_current_plot(mcp_session):
+async def test_open_document_file():
+    """Test opening a saved document file"""
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+
+            # Create a temporary R file
+            temp_file = "test_open_script.R"
+            result = await session.call_tool("eval_r", {
+                "code": f'''
+                temp_path <- file.path(tempdir(), "{temp_file}")
+                writeLines(c("# Saved test", "y <- 100", "print(y)"), temp_path)
+                temp_path
+                ''',
+                "allow_reassign": True
+            })
+            temp_path = result.content[0].text.strip().replace('[1] "', '').replace('"', '')
+
+            # Open the file
+            result = await session.call_tool("open_document_file", {
+                "file_path": temp_path
+            })
+
+            assert "Opened document:" in result.content[0].text
+            assert temp_file in result.content[0].text
+
+            # Verify it's active and we can read it
+            result = await session.call_tool("get_active_document_contents", {})
+            contents = result.content[0].text
+            assert "# Saved test" in contents
+            assert "y <- 100" in contents
+
+            # Clean up
+            await session.call_tool("eval_r", {
+                "code": f'unlink("{temp_path}")',
+                "allow_reassign": True
+            })
+
+
+@pytest.mark.asyncio
+async def test_replace_text_range_active():
+    """Test replacing text in the active document"""
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+
+            # Create a document
+            result = await session.call_tool("create_untitled_document", {
+                "text": "old_value <- 123"
+            })
+            doc_id = extract_doc_id_from_insert(result.content[0].text)
+
+            # Replace text
+            result = await session.call_tool("replace_text_range", {
+                "old_string": "old_value <- 123",
+                "new_string": "new_value <- 456"
+            })
+
+            assert "Text replaced successfully" in result.content[0].text
+
+            # Verify replacement
+            result = await session.call_tool("get_active_document_contents", {})
+            assert "new_value <- 456" in result.content[0].text
+
+            # Clean up
+            await cleanup_document(session, doc_id)
+
+
+@pytest.mark.asyncio
+async def test_source_active_document():
+    """Test sourcing the active document"""
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+
+            # Create a document with R code
+            result = await session.call_tool("create_untitled_document", {
+                "text": "source_test_var <- 999"
+            })
+            doc_id = extract_doc_id_from_insert(result.content[0].text)
+
+            # Source the active document
+            result = await session.call_tool("source_active_document", {})
+
+            assert "Sourced document:" in result.content[0].text
+            assert "source_test_var <- 999" in result.content[0].text
+
+            # Verify variable was created
+            result = await session.call_tool("list_objects", {})
+            assert "source_test_var" in result.content[0].text
+
+            # Clean up
+            await cleanup_document(session, doc_id)
+
+
+@pytest.mark.asyncio
+async def test_get_current_plot():
     """Test capturing a plot"""
-    # Create a simple plot
-    await mcp_session.call_tool("eval_r", {"code": "plot(1:10, 1:10)"})
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
 
-    result = await mcp_session.call_tool("get_current_plot", {
-        "width": 400,
-        "height": 300,
-        "format": "png"
-    })
+            # Create a simple plot
+            await session.call_tool("eval_r", {"code": "plot(1:10, 1:10)"})
 
-    assert result.content[0].type == "image"
-    assert len(result.content[0].data) > 100  # Should have substantial base64 data
+            result = await session.call_tool("get_current_plot", {
+                "width": 400,
+                "height": 300,
+                "format": "png"
+            })
+
+            assert result.content[0].type == "image"
+            assert len(result.content[0].data) > 100  # Should have substantial base64 data
 
 
 if __name__ == "__main__":

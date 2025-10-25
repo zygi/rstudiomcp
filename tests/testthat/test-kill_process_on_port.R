@@ -27,7 +27,8 @@ test_that("kill_process_on_port detects current process and refuses to kill it",
 
   # Step 1: Confirm port is free initially
   expect_false(is_port_in_use(test_port),
-               info = paste("Port", test_port, "should be free initially"))
+    info = paste("Port", test_port, "should be free initially")
+  )
 
   # Step 2: Create a simple httpuv server on the test port in the CURRENT process
   test_server <- httpuv::startServer(
@@ -45,7 +46,8 @@ test_that("kill_process_on_port detects current process and refuses to kill it",
 
   # Step 3: Confirm the port is now in use
   expect_true(is_port_in_use(test_port),
-              info = paste("Port", test_port, "should be in use after starting server"))
+    info = paste("Port", test_port, "should be in use after starting server")
+  )
 
   # Step 4: Try to kill the process - should detect it's the current process and refuse
   result <- kill_process_on_port(test_port, ask_confirmation = FALSE)
@@ -55,7 +57,8 @@ test_that("kill_process_on_port detects current process and refuses to kill it",
 
   # Step 5: Port should still be in use (we didn't kill ourselves)
   expect_true(is_port_in_use(test_port),
-              info = paste("Port", test_port, "should still be in use (process not killed)"))
+    info = paste("Port", test_port, "should still be in use (process not killed)")
+  )
 
   # Cleanup: properly stop the server
   httpuv::stopServer(test_server)
@@ -63,7 +66,8 @@ test_that("kill_process_on_port detects current process and refuses to kill it",
 
   # Step 6: Confirm port is free after proper cleanup
   expect_false(is_port_in_use(test_port),
-               info = paste("Port", test_port, "should be free after stopServer()"))
+    info = paste("Port", test_port, "should be free after stopServer()")
+  )
 })
 
 test_that("kill_process_on_port returns TRUE when port is not in use", {

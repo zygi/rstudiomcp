@@ -15,7 +15,13 @@ test_that("setup_autoload adds the exact code block", {
   test_dir <- tempfile()
   dir.create(test_dir)
   old_dir <- setwd(test_dir)
-  on.exit({setwd(old_dir); unlink(test_dir, recursive = TRUE)}, add = TRUE)
+  on.exit(
+    {
+      setwd(old_dir)
+      unlink(test_dir, recursive = TRUE)
+    },
+    add = TRUE
+  )
   rprofile_path <- ".Rprofile"
 
   autoload_code <- rstudiomcp:::.get_autoload_code()
@@ -23,8 +29,10 @@ test_that("setup_autoload adds the exact code block", {
 
   expect_true(file.exists(rprofile_path))
   content <- read_file(rprofile_path)
-  expect_contains(content, c("# Auto-load rstudiomcp package", "tryCatch",
-                              "library(rstudiomcp)", "Failed to load rstudiomcp"))
+  expect_contains(content, c(
+    "# Auto-load rstudiomcp package", "tryCatch",
+    "library(rstudiomcp)", "Failed to load rstudiomcp"
+  ))
 })
 
 test_that("disable_autoload removes the exact code block", {
@@ -34,7 +42,13 @@ test_that("disable_autoload removes the exact code block", {
   test_dir <- tempfile()
   dir.create(test_dir)
   old_dir <- setwd(test_dir)
-  on.exit({setwd(old_dir); unlink(test_dir, recursive = TRUE)}, add = TRUE)
+  on.exit(
+    {
+      setwd(old_dir)
+      unlink(test_dir, recursive = TRUE)
+    },
+    add = TRUE
+  )
   rprofile_path <- ".Rprofile"
 
   autoload_code <- rstudiomcp:::.get_autoload_code()
@@ -61,7 +75,13 @@ test_that("adding code twice doesn't duplicate", {
   test_dir <- tempfile()
   dir.create(test_dir)
   old_dir <- setwd(test_dir)
-  on.exit({setwd(old_dir); unlink(test_dir, recursive = TRUE)}, add = TRUE)
+  on.exit(
+    {
+      setwd(old_dir)
+      unlink(test_dir, recursive = TRUE)
+    },
+    add = TRUE
+  )
   rprofile_path <- ".Rprofile"
 
   autoload_code <- rstudiomcp:::.get_autoload_code()
@@ -89,7 +109,9 @@ test_that("autoload code is valid R syntax", {
 
 test_that("autoload code has proper tryCatch structure", {
   autoload_code <- rstudiomcp:::.get_autoload_code()
-  expect_contains(autoload_code, c("tryCatch\\(", "library\\(rstudiomcp\\)",
-                                    "error = function\\(e\\)", "warning\\(",
-                                    "Failed to load rstudiomcp"), fixed = FALSE)
+  expect_contains(autoload_code, c(
+    "tryCatch\\(", "library\\(rstudiomcp\\)",
+    "error = function\\(e\\)", "warning\\(",
+    "Failed to load rstudiomcp"
+  ), fixed = FALSE)
 })

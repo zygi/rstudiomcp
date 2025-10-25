@@ -60,16 +60,22 @@ configure_mcp_server <- function() {
     miniUI::miniContentPanel(
       shiny::tags$div(
         style = "padding: 20px;",
-        shiny::numericInput("port", "Port Number:", value = get_mcp_port(),
-                            min = 1024, max = 65535, step = 1),
+        shiny::numericInput("port", "Port Number:",
+          value = get_mcp_port(),
+          min = 1024, max = 65535, step = 1
+        ),
         shiny::checkboxInput("auto_start", "Auto-start server when package loads",
-                             value = get_mcp_auto_start()),
+          value = get_mcp_auto_start()
+        ),
         shiny::hr(),
-        shiny::tags$p(shiny::tags$strong("Note:"),
-                      "Auto-start changes take effect on next R session restart."),
+        shiny::tags$p(
+          shiny::tags$strong("Note:"),
+          "Auto-start changes take effect on next R session restart."
+        ),
         shiny::hr(),
         shiny::actionButton("restart", "Save & Restart Server",
-                            class = "btn-primary", style = "width: 100%;")
+          class = "btn-primary", style = "width: 100%;"
+        )
       )
     )
   )
@@ -91,7 +97,8 @@ configure_mcp_server <- function() {
       start_mcp_server(port = input$port)
       add_to_mcp_config()
       shiny::showNotification(paste0("Server restarted on port ", input$port),
-                              type = "message", duration = 3)
+        type = "message", duration = 3
+      )
       Sys.sleep(1)
       shiny::stopApp()
     })

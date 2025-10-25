@@ -59,7 +59,7 @@ Claude Code can use these tools:
 
 ### Code Execution
 - `eval_r` - Execute R code in the R session
-- `source_document` - Run an R script (like clicking Source button)
+- `source_active_document` - Run the currently active R script (like clicking Source button)
 
 ### Environment Inspection
 - `list_environments` - List available R environments
@@ -68,10 +68,14 @@ Claude Code can use these tools:
 - `get_console_history` - View recent console commands
 
 ### Document Editing
-- `list_open_documents` - List all open RStudio documents
-- `get_document_contents` - Read document contents
-- `insert_text` - Insert text at cursor or specific location
-- `replace_text_range` - Replace text with exact string matching
+> **Note**: All document editing tools work on the currently active document only.
+> Use `create_untitled_document` to create new docs or `open_document_file` to open saved files.
+
+- `create_untitled_document` - Create a new untitled document (becomes active automatically)
+- `open_document_file` - Open or refocus a saved document file by path
+- `get_active_document_contents` - Read the contents of the active document
+- `insert_text` - Insert text at cursor or specific location in the active document
+- `replace_text_range` - Replace text with exact string matching in the active document
 
 ### Visualization
 - `get_current_plot` - Capture the current plot as an image
@@ -152,3 +156,4 @@ TODO insert command
 ## Contributing
 
 Issues and pull requests welcome! The author isn't an R expert so some stupid decisions may have been made.
+This is not an official RStudio product.
