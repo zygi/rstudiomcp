@@ -79,7 +79,7 @@ Claude Code can use these tools:
 
 ### Visualization
 - `get_current_plot` - Capture the current plot as an image
-- `get_viewer_content` - Get HTML content from the Viewer pane
+- `get_latest_viewer_content` - Get HTML content of the last rendered page in the Viewer pane
 
 ## Configuration
 

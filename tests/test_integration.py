@@ -115,7 +115,7 @@ async def test_list_tools():
                 "get_console_history", "get_active_document",
                 "create_untitled_document", "open_document_file",
                 "insert_text", "replace_text_range", "source_active_document",
-                "get_current_plot", "get_viewer_content"
+                "get_current_plot", "get_latest_viewer_content"
             ]
             for expected in expected_tools:
                 assert expected in tool_names

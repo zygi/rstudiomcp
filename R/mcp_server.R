@@ -312,7 +312,7 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
             )
           ),
           mk_tool(
-            "get_viewer_content", "Get the HTML content currently dispalyed to the user in RStudio Viewer pane (HTML widgets, interactive plots, etc.)",
+            "get_latest_viewer_content", "Get the HTML content of the last rendered page in RStudio Viewer pane (HTML widgets, interactive plots, etc.)",
             list(
               max_length = mk_prop("number", "Maximum number of characters to return (default: 10000)"),
               offset = mk_prop("number", "Character offset to start reading from (default: 0, for pagination)")
@@ -485,7 +485,7 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
             )
             list(content = list(list(type = "image", data = image_data, mimeType = mime_type)))
           }
-        } else if (tool_name == "get_viewer_content") {
+        } else if (tool_name == "get_latest_viewer_content") {
           max_length <- if (!is.null(args$max_length)) as.integer(args$max_length) else 10000
           offset <- if (!is.null(args$offset)) as.integer(args$offset) else 0
 
