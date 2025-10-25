@@ -73,7 +73,7 @@ Claude Code can use these tools:
 
 - `create_untitled_document` - Create a new untitled document (becomes active automatically)
 - `open_document_file` - Open or refocus a saved document file by path
-- `get_active_document_contents` - Read the contents of the active document
+- `get_active_document` - Read the active document (shows ID, path, and contents)
 - `insert_text` - Insert text at cursor or specific location in the active document
 - `replace_text_range` - Replace text with exact string matching in the active document
 

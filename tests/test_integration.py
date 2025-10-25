@@ -112,7 +112,7 @@ async def test_list_tools():
             tool_names = [tool.name for tool in tools.tools]
             expected_tools = [
                 "eval_r", "list_environments", "list_objects", "get_object",
-                "get_console_history", "get_active_document_contents",
+                "get_console_history", "get_active_document",
                 "create_untitled_document", "open_document_file",
                 "insert_text", "replace_text_range", "source_active_document",
                 "get_current_plot", "get_viewer_content"
@@ -258,8 +258,10 @@ async def test_create_untitled_document():
             doc_id = extract_doc_id_from_insert(response_text)
 
             # Verify it's active and we can read it
-            result = await session.call_tool("get_active_document_contents", {})
+            result = await session.call_tool("get_active_document", {})
             contents = result.content[0].text
+            assert "ID:" in contents
+            assert "Path: <untitled>" in contents
             assert "# Test document" in contents
             assert "print('Hello')" in contents
 
@@ -286,8 +288,9 @@ async def test_insert_text_active_document():
             })
 
             # Verify content was inserted
-            result = await session.call_tool("get_active_document_contents", {})
+            result = await session.call_tool("get_active_document", {})
             contents = result.content[0].text
+            assert "ID:" in contents
             assert "# Original content" in contents
             assert "x <- 42" in contents
 
@@ -323,8 +326,11 @@ async def test_open_document_file():
             assert temp_file in result.content[0].text
 
             # Verify it's active and we can read it
-            result = await session.call_tool("get_active_document_contents", {})
+            result = await session.call_tool("get_active_document", {})
             contents = result.content[0].text
+            assert "ID:" in contents
+            assert "Path:" in contents
+            assert temp_file in contents  # Filename should be in path
             assert "# Saved test" in contents
             assert "y <- 100" in contents
 
@@ -357,7 +363,7 @@ async def test_replace_text_range_active():
             assert "Text replaced successfully" in result.content[0].text
 
             # Verify replacement
-            result = await session.call_tool("get_active_document_contents", {})
+            result = await session.call_tool("get_active_document", {})
             assert "new_value <- 456" in result.content[0].text
 
             # Clean up

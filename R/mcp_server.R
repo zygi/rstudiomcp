@@ -230,7 +230,7 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
         capabilities = list(
           tools = list(listChanged = FALSE) # Static tool list
         ),
-        instructions = "This server provides access to an active RStudio session. You can execute R code, inspect the environment and objects, edit documents, source scripts, and capture plots. IMPORTANT WORKFLOW: All document editing tools (insert_text, replace_text_range, get_active_document_contents, source_active_document) work on the CURRENTLY ACTIVE document only. To work with a specific document: (1) use create_untitled_document to create a new one (becomes active automatically), OR (2) use open_document_file to open/focus a saved file. After that, all document operations apply to that now-active document. Don't destroy the user's work - only perform mutable non-undoable actions like eval_r or source_active_document if the user expects that. IMPORTANT: WHEN DOING SOMETHING DESTRUCTIVE, LIKE DELETING FILES OR FORCIBLY CLOSING DOCUMENTS, ALWAYS ASK THE USER FIRST."
+        instructions = "This server provides access to an active RStudio session. You can execute R code, inspect the environment and objects, edit documents, source scripts, and capture plots. All document editing tools (insert_text, replace_text_range, get_active_document, source_active_document) work on the CURRENTLY ACTIVE document only. To work with a specific document: (1) use create_untitled_document to create a new one (becomes active automatically), OR (2) use open_document_file to open/focus a saved file. After that, all document operations apply to that now-active document. Your API doesn't allow you to list or navigate between open documents. Don't destroy the user's work - only perform mutable non-undoable actions like eval_r or source_active_document if the user expects that. IMPORTANT: WHEN DOING SOMETHING DESTRUCTIVE, LIKE DELETING FILES OR FORCIBLY CLOSING DOCUMENTS, ALWAYS ASK THE USER FIRST."
       )
     )
   }
@@ -268,7 +268,7 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
             list(max_lines = mk_prop("number", "Maximum number of recent commands to return (default: 50)"))
           ),
           mk_tool(
-            "get_active_document_contents", "Read the contents of the currently active document in RStudio",
+            "get_active_document", "Read the contents of the currently active document in RStudio",
             list(
               offset = mk_prop("number", "Line number to start reading from (optional)"),
               limit = mk_prop("number", "Number of lines to read (optional)")
@@ -381,15 +381,22 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
             error = function(e) paste("Error retrieving history:", e$message)
           )
           text_response(paste(history_lines, collapse = "\n"))
-        } else if (tool_name == "get_active_document_contents") {
-          ctx <- rstudioapi::getActiveDocumentContext()
-          all_lines <- ctx$contents  # Already a character vector, one element per line
+        } else if (tool_name == "get_active_document") {
+          ctx <- rstudioapi::getSourceEditorContext()
+
+          # Format header with ID and path
+          doc_path <- if (nzchar(ctx$path)) ctx$path else "<untitled>"
+          header <- paste0("ID: ", ctx$id, "\nPath: ", doc_path, "\n\n")
+
+          # Format contents with line numbers
+          all_lines <- ctx$contents # Already a character vector, one element per line
           offset <- if (!is.null(args$offset)) as.integer(args$offset) else 1
           limit <- if (!is.null(args$limit)) as.integer(args$limit) else length(all_lines)
           end_line <- min(offset + limit - 1, length(all_lines))
           selected_lines <- all_lines[offset:end_line]
-          formatted <- paste(sprintf("%6d\t%s", offset:end_line, selected_lines), collapse = "\n")
-          text_response(formatted)
+          formatted_content <- paste(sprintf("%6d\t%s", offset:end_line, selected_lines), collapse = "\n")
+
+          text_response(paste0(header, formatted_content))
         } else if (tool_name == "create_untitled_document") {
           doc_id <- rstudioapi::documentNew(text = args$text, type = "r", execute = FALSE)
           text_response(paste0("Created new document with ID: ", doc_id))
@@ -398,7 +405,7 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
           doc_id <- rstudioapi::documentOpen(args$file_path)
           text_response(paste0("Opened document: ", args$file_path, " (ID: ", doc_id, ")"))
         } else if (tool_name == "insert_text") {
-          ctx <- rstudioapi::getActiveDocumentContext()
+          ctx <- rstudioapi::getSourceEditorContext()
           location <- if (!is.null(args$row) && !is.null(args$column)) {
             rstudioapi::document_position(as.integer(args$row), as.integer(args$column))
           } else {
@@ -409,7 +416,7 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
           col_num <- if (is.null(args$column)) location["column"] else args$column
           text_response(paste0("Text inserted at row ", row_num, ", column ", col_num))
         } else if (tool_name == "replace_text_range") {
-          ctx <- rstudioapi::getActiveDocumentContext()
+          ctx <- rstudioapi::getSourceEditorContext()
           contents <- paste(ctx$contents, collapse = "\n")
           if (!grepl(args$old_string, contents, fixed = TRUE)) {
             stop("old_string not found in document")
@@ -435,7 +442,7 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
             text_response("Text replaced successfully")
           }
         } else if (tool_name == "source_active_document") {
-          ctx <- rstudioapi::getActiveDocumentContext()
+          ctx <- rstudioapi::getSourceEditorContext()
 
           # Source the document
           temp_file <- tempfile(fileext = ".R")
@@ -627,6 +634,11 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
   message("Endpoint: http://localhost:", port)
   message("Transport: Streamable HTTP (JSON responses, no SSE)")
   message("Run stop_mcp_server() to stop the server")
+
+  # Update .mcp.json (unless in test mode)
+  if (!.test_mode) {
+    add_to_mcp_config()
+  }
 
   invisible(.rstudiomcp_env$server)
 }

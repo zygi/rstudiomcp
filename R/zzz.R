@@ -41,8 +41,7 @@
     if (get_mcp_auto_start()) {
       tryCatch(
         {
-          start_mcp_server()
-          add_to_mcp_config()
+          start_mcp_server() # This will call add_to_mcp_config() internally
         },
         error = function(e) {
           packageStartupMessage("ERROR: Failed to start MCP server: ", e$message)

@@ -28,7 +28,7 @@ MCP (Model Context Protocol) server for RStudio. Allows Claude Code to interact 
 
 #### Document Operations (Active Document Model)
 - **Core principle**: All document editing tools work ONLY on the currently active document
-- **Tools affected**: `insert_text`, `replace_text_range`, `get_active_document_contents`, `source_active_document`
+- **Tools affected**: `insert_text`, `replace_text_range`, `get_active_document`, `source_active_document`
 - **Workflow**:
   1. To work with a document, first make it active using:
      - `create_untitled_document(text)` - creates new doc, becomes active automatically
@@ -86,7 +86,7 @@ Set in `handle_initialize()` result under `instructions` field. Appears in Claud
 # Client workflow:
 1. create_untitled_document("x <- 1")  # Returns ID, becomes active
 2. insert_text("\ny <- 2")             # Adds to active doc
-3. get_active_document_contents()       # Reads active doc
+3. get_active_document()                # Reads active doc (shows ID, path, contents)
 4. source_active_document()             # Runs active doc
 
 # Or with saved files:

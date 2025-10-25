@@ -94,8 +94,7 @@ configure_mcp_server <- function() {
     shiny::observeEvent(input$restart, {
       save_settings()
       if (!is.null(.rstudiomcp_env$server)) stop_mcp_server()
-      start_mcp_server(port = input$port)
-      add_to_mcp_config()
+      start_mcp_server(port = input$port) # This will call add_to_mcp_config() internally
       shiny::showNotification(paste0("Server restarted on port ", input$port),
         type = "message", duration = 3
       )

@@ -9,6 +9,9 @@ repos:
           - jsonlite
           - httpuv
           - rstudioapi
+          - shiny
+          - miniUI
+          - base64enc
       - id: lintr
         args: [--warn_only]
       - id: parsable-R
