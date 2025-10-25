@@ -71,21 +71,26 @@ async def clean_environment():
     async with await get_session() as (read_stream, write_stream, _):
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
-            # Remove all objects from global environment
+            # Remove all objects from global environment (except MCP server reference)
             await session.call_tool("eval_r", {
-                "code": "rm(list = ls(all.names = TRUE))",
+                "code": """
+                # Remove everything except .rstudiomcp_server
+                objs_to_remove <- setdiff(ls(all.names = TRUE), ".rstudiomcp_server")
+                rm(list = objs_to_remove)
+                """,
                 "allow_reassign": True
             })
-            # Close all open documents
+            # Close all open documents by repeatedly closing the active document
             await session.call_tool("eval_r", {
                 "code": """
                 tryCatch({
-                  # Get all document IDs and close them
-                  doc_ids <- sapply(rstudioapi::getSourceEditorContext(), function(ctx) ctx$id)
-                  for (doc_id in doc_ids) {
-                    if (!is.na(doc_id) && doc_id != "#console") {
-                      rstudioapi::documentClose(id = doc_id, save = FALSE)
+                  # Close up to 20 documents (safety limit)
+                  for (i in 1:20) {
+                    ctx <- rstudioapi::getActiveDocumentContext()
+                    if (is.null(ctx$id) || ctx$id == "#console" || !nzchar(ctx$id)) {
+                      break
                     }
+                    rstudioapi::documentClose(id = ctx$id, save = FALSE)
                   }
                 }, error = function(e) invisible())
                 """,

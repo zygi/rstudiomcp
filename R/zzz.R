@@ -1,46 +1,11 @@
 # Package hooks
 
 .onLoad <- function(libname, pkgname) {
-  if (!interactive() || !rstudioapi::isAvailable()) {
-    if (interactive() && !rstudioapi::isAvailable()) {
-      packageStartupMessage("Note: rstudiomcp requires RStudio IDE. Package loaded but server not started.")
-    }
+  if (!interactive()) {
     return()
   }
 
-  # Auto-start server if enabled
-  if (get_mcp_auto_start()) {
-    tryCatch(
-      {
-        start_mcp_server()
-        add_to_mcp_config()
-      },
-      error = function(e) {
-        packageStartupMessage("ERROR: Failed to start MCP server: ", e$message)
-        packageStartupMessage("Port ", get_mcp_port(), " may be in use.")
-        packageStartupMessage("Change port via configure_mcp_server()")
-      }
-    )
-  }
-
-  # Set up viewer tracking (wraps viewer to capture URLs)
-  tryCatch(
-    {
-      .rstudiomcp_env$original_viewer <- getOption("viewer")
-      # Only wrap if original viewer exists and is a function
-      if (is.function(.rstudiomcp_env$original_viewer)) {
-        options(viewer = function(url, height = NULL) {
-          .rstudiomcp_env$last_url <- url
-          .rstudiomcp_env$original_viewer(url, height)
-        })
-      }
-    },
-    error = function(e) {
-      message("Warning: Failed to set up viewer tracking: ", e$message)
-    }
-  )
-
-  # Register exit handler
+  # Always register exit handler (cleanup on R session exit)
   reg.finalizer(.rstudiomcp_env, function(e) {
     tryCatch(
       {
@@ -52,6 +17,54 @@
       }
     )
   }, onexit = TRUE)
+
+  # Define RStudio-specific setup (viewer wrapping + server auto-start)
+  setup_rstudio_features <- function() {
+    # Set up viewer tracking (wraps viewer to capture URLs)
+    tryCatch(
+      {
+        .rstudiomcp_env$original_viewer <- getOption("viewer")
+        # Only wrap if original viewer exists and is a function
+        if (is.function(.rstudiomcp_env$original_viewer)) {
+          options(viewer = function(url, height = NULL) {
+            .rstudiomcp_env$last_url <- url
+            .rstudiomcp_env$original_viewer(url, height)
+          })
+        }
+      },
+      error = function(e) {
+        message("Warning: Failed to set up viewer tracking: ", e$message)
+      }
+    )
+
+    # Auto-start server if enabled
+    if (get_mcp_auto_start()) {
+      tryCatch(
+        {
+          start_mcp_server()
+          add_to_mcp_config()
+        },
+        error = function(e) {
+          packageStartupMessage("ERROR: Failed to start MCP server: ", e$message)
+          packageStartupMessage("Port ", get_mcp_port(), " may be in use.")
+          packageStartupMessage("Change port via configure_mcp_server()")
+        }
+      )
+    }
+  }
+
+  # Run setup now if RStudio is ready, otherwise delay until session init
+  if (rstudioapi::isAvailable()) {
+    setup_rstudio_features()
+  } else {
+    # RStudio not ready yet (e.g., during .Rprofile loading at startup)
+    # Use hook to run setup after RStudio session is fully initialized
+    setHook("rstudio.sessionInit", function(newSession) {
+      if (newSession) {
+        setup_rstudio_features()
+      }
+    }, action = "append")
+  }
 }
 
 .onDetach <- function(libpath) {
