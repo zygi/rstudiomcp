@@ -12,24 +12,20 @@ This R package runs a local MCP server inside your RStudio session, allowing Cla
 - Capture plots from the Plots pane
 - Access HTML content from the Viewer pane
 
-All interactions happen over localhost (127.0.0.1) for security.
-
 ## Installation
 
 ```r
 # Install from GitHub
-devtools::install_github("yourusername/rstudiomcp")
+install.packages("remotes")
+library("remotes")
+remotes::install_github("zygi/rstudiomcp")
 ```
 
 ## Quick Start
 
-### Option 1: Auto-start (Recommended for regular use)
+### Option 1: Auto-load
 
-Use the RStudio Addin: **"Enable Auto-load (per project)"** or run:
-```r
-library(rstudiomcp)
-setup_autoload()
-```
+Use the RStudio Addin: **"Enable Auto-load (per project)"**
 
 This adds `library(rstudiomcp)` to your project's `.Rprofile`, so the server starts automatically when you open the project.
 
@@ -48,12 +44,21 @@ start_mcp_server()
 
 You can now ask Claude Code to interact with your R session!
 
+## Troubleshooting
+
+If you're having problems setting this up, paste the following into Claude:
+```
+Hi! I'm trying to set up RStudio-MCP to use with a Claude Code session but it's not working.
+Could you please help me debug? The project readme is at https://github.com/zygi/rstudiomcp/README.md
+(but maybe fetch it as a raw file.)
+```
+
 ## Available Tools
 
 Claude Code can use these tools:
 
 ### Code Execution
-- `eval_r` - Execute R code with optional environment control
+- `eval_r` - Execute R code in the R session
 - `source_document` - Run an R script (like clicking Source button)
 
 ### Environment Inspection
@@ -102,14 +107,6 @@ disable_autoload()
 
 Or use the RStudio Addin: **"Disable Auto-load (per project)"**
 
-## RStudio Addins
-
-After installation, these commands appear in the **Addins** dropdown:
-- **Enable Auto-load (per project)** - Add auto-start to project `.Rprofile`
-- **Disable Auto-load (per project)** - Remove auto-start from project `.Rprofile`
-- **Configure MCP Server** - Change port and settings
-- **Restart MCP Server** - Restart the server
-- **MCP Server Status** - Check if server is running
 
 ## Troubleshooting
 
@@ -132,59 +129,26 @@ The server may get orphaned. Use:
 restart_mcp_server()
 ```
 
-### Connection lost after devtools::load_all()
-This is expected during development. The server automatically stops and restarts. Just reconnect Claude Code with `/mcp`.
-
 ## Development
 
 See `CLAUDE.md` for developer notes and architecture details.
-
-### Hot-Reload During Development
-
-```r
-devtools::load_all()  # or Ctrl+Shift+L
+Once the server is up, you can also use MCP Inspector for debugging:
+```
+TODO insert command
 ```
 
-The server will automatically:
-1. Stop via `.onDetach()` hook
-2. Reload package code
-3. Start fresh via `.onLoad()` hook
+## Technical Details
 
-## How It Works
+- The R package runs in RStudio's R session and starts up an HTTP MCP server on 127.0.0.1
+- It also writes (or updates) a `.mcp.json` file in the project directory.
+- Once you start Claude Code, it sees this file and attempts to connect to the MCP server.
 
-- Server runs on localhost:16731 (configurable)
-- Uses `httpuv` for HTTP server
-- Implements MCP Streamable HTTP transport (JSON-RPC 2.0)
-- Binds to 127.0.0.1 (localhost only - no external network access)
-- Server reference persists in `.GlobalEnv` across `devtools::load_all()`
-- Settings stored in RStudio preferences via `rstudioapi`
+### Notes:
+- To allow the MCP access what's on the panel, the server needs to wrap the `viewer` function. This is obviously hacky, I haven't seen it break anything yet but please report if you find it a real problem.
 
-## Package Structure
 
-```
-rstudiomcp/
-├── R/
-│   ├── mcp_server.R      # Main MCP server and tool handlers
-│   ├── mcp_config.R      # .mcp.json file management
-│   ├── settings.R        # Preferences and auto-load setup
-│   ├── utils.R           # Helper functions
-│   └── zzz.R             # Package hooks (.onLoad, .onDetach, .onUnload)
-├── inst/
-│   └── rstudio/
-│       └── addins.dcf    # RStudio Addins configuration
-├── tests/
-│   └── testthat/         # Unit tests
-├── CLAUDE.md             # Developer notes for AI assistants
-├── LICENSE               # MIT License
-└── README.md
-```
 
-## License
-
-MIT License - Copyright (c) 2025 Zygimantas Straznickas
-
-See LICENSE file for details.
 
 ## Contributing
 
-Issues and pull requests welcome!
+Issues and pull requests welcome! The author isn't an R expert so some stupid decisions may have been made.

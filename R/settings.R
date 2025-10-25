@@ -87,7 +87,7 @@ configure_mcp_server <- function() {
 
     shiny::observeEvent(input$restart, {
       save_settings()
-      if (!is.null(.mcp_env$server)) stop_mcp_server()
+      if (!is.null(.rstudiomcp_env$server)) stop_mcp_server()
       start_mcp_server(port = input$port)
       add_to_mcp_config()
       shiny::showNotification(paste0("Server restarted on port ", input$port),
@@ -103,6 +103,18 @@ configure_mcp_server <- function() {
   shiny::runGadget(ui, server, viewer = viewer)
 }
 
+# Get the exact auto-load code block
+#' @keywords internal
+.get_autoload_code <- function() {
+  "
+# Auto-load rstudiomcp package
+tryCatch(
+  library(rstudiomcp),
+  error = function(e) warning(\"Failed to load rstudiomcp: \", e$message)
+)
+"
+}
+
 #' Setup Auto-load on RStudio Startup
 #'
 #' Adds library(rstudiomcp) to project .Rprofile and enables auto-start
@@ -110,7 +122,7 @@ configure_mcp_server <- function() {
 #' @export
 setup_autoload <- function() {
   # Check if running in RStudio
-  if (Sys.getenv("RSTUDIO") != "1") {
+  if (!rstudioapi::isAvailable()) {
     stop("rstudiomcp requires RStudio. Please run this package in RStudio IDE.")
   }
 
@@ -118,8 +130,8 @@ setup_autoload <- function() {
 
   # Check if already setup
   if (file.exists(rprofile_path)) {
-    content <- readLines(rprofile_path, warn = FALSE)
-    if (any(grepl("library\\(rstudiomcp\\)", content))) {
+    content <- paste(readLines(rprofile_path, warn = FALSE), collapse = "\n")
+    if (grepl("# Auto-load rstudiomcp package", content, fixed = TRUE)) {
       message("Auto-load already configured in ", rprofile_path)
       set_mcp_auto_start(TRUE)
       return(invisible(FALSE))
@@ -127,7 +139,7 @@ setup_autoload <- function() {
   }
 
   # Warn user
-  message("This will add library(rstudiomcp) to your project .Rprofile")
+  message("This will add auto-load code for rstudiomcp to your project .Rprofile")
   message("Location: ", rprofile_path)
   message("\nNote: This is project-specific. Other projects will need separate setup.")
 
@@ -140,13 +152,12 @@ setup_autoload <- function() {
   }
 
   # Add to .Rprofile
-  cat("\n# Auto-load rstudiomcp package\nlibrary(rstudiomcp)\n",
-      file = rprofile_path, append = TRUE)
+  cat(.get_autoload_code(), file = rprofile_path, append = TRUE)
 
   # Enable auto-start
   set_mcp_auto_start(TRUE)
 
-  message("\n\u2713 Added library(rstudiomcp) to ", rprofile_path)
+  message("\n\u2713 Added auto-load code to ", rprofile_path)
   message("\u2713 Enabled MCP server auto-start")
   message("\nRestart R session for changes to take effect")
   invisible(TRUE)
@@ -166,20 +177,17 @@ disable_autoload <- function() {
     return(invisible(FALSE))
   }
 
-  content <- readLines(rprofile_path, warn = FALSE)
+  content <- paste(readLines(rprofile_path, warn = FALSE), collapse = "\n")
 
-  # Find and remove rstudiomcp lines
-  rstudiomcp_pattern <- "library\\(rstudiomcp\\)|# Auto-load rstudiomcp"
-  matches <- grepl(rstudiomcp_pattern, content)
-
-  if (!any(matches)) {
-    message("library(rstudiomcp) not found in ", rprofile_path)
+  # Check if our auto-load code is present
+  if (!grepl("# Auto-load rstudiomcp package", content, fixed = TRUE)) {
+    message("rstudiomcp auto-load code not found in ", rprofile_path)
     set_mcp_auto_start(FALSE)
     return(invisible(FALSE))
   }
 
-  # Remove matching lines and clean up extra blank lines
-  new_content <- content[!matches]
+  # Remove the exact auto-load code block
+  new_content <- gsub(.get_autoload_code(), "", content, fixed = TRUE)
   writeLines(new_content, rprofile_path)
 
   # Disable auto-start

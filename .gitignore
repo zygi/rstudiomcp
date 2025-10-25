@@ -50,3 +50,8 @@ rsconnect/
 
 # Project-specific
 .mcp.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/

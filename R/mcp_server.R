@@ -1,8 +1,10 @@
 # Package environment
-.mcp_env <- new.env(parent = emptyenv())
-.mcp_env$server <- NULL
-.mcp_env$port <- NULL
-.mcp_env$sse_connections <- list()
+.rstudiomcp_env <- new.env(parent = emptyenv())
+.rstudiomcp_env$server <- NULL
+.rstudiomcp_env$port <- NULL
+.rstudiomcp_env$sse_connections <- list()
+.rstudiomcp_env$last_url <- NULL
+.rstudiomcp_env$original_viewer <- NULL
 
 # Persistent server reference (survives namespace reloads)
 get_server_ref <- function() {
@@ -171,10 +173,12 @@ mk_tool <- function(name, desc, props = list(), required = character(0)) {
 #' Launches the MCP server for Claude Code integration via SSE transport
 #'
 #' @param port Port number for the server (default: from settings or 3000)
+#' @param .test_mode Internal parameter for testing, bypasses RStudio check
+#' @keywords internal
 #' @export
-start_mcp_server <- function(port = NULL) {
+start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
   # Check if running in RStudio
-  if (Sys.getenv("RSTUDIO") != "1") {
+  if (!.test_mode && !rstudioapi::isAvailable()) {
     stop("rstudiomcp requires RStudio. Please run this package in RStudio IDE.")
   }
 
@@ -194,9 +198,9 @@ start_mcp_server <- function(port = NULL) {
     clear_server_ref()
   }
 
-  # Also check if .mcp_env has a server (normal case)
-  if (!is.null(.mcp_env$server)) {
-    message("MCP Server already running on port ", .mcp_env$port)
+  # Also check if .rstudiomcp_env has a server (normal case)
+  if (!is.null(.rstudiomcp_env$server)) {
+    message("MCP Server already running on port ", .rstudiomcp_env$port)
     message("Stop it first with stop_mcp_server()")
     return(invisible(NULL))
   }
@@ -216,7 +220,7 @@ start_mcp_server <- function(port = NULL) {
       result = list(
         protocolVersion = "2024-11-05",
         serverInfo = list(
-          name = "rstudio-mcp",
+          name = "rstudio",
           version = "0.1.0",
           title = "RStudio MCP Server"
         ),
@@ -257,7 +261,8 @@ start_mcp_server <- function(port = NULL) {
                   list(file_path = mk_prop("string", "Path to a document open in RStudio (if not provided, uses active document)"),
                        text = mk_prop("string", "Text to insert"),
                        row = mk_prop("number", "Row number to insert at (optional, uses cursor position if not provided)"),
-                       column = mk_prop("number", "Column number to insert at (optional, uses cursor position if not provided)")),
+                       column = mk_prop("number", "Column number to insert at (optional, uses cursor position if not provided)"),
+                       create_new = mk_prop("boolean", "If true, create a new untitled document instead of using an existing one (default: false). Cannot be combined with file_path.")),
                   "text"),
           mk_tool("replace_text_range", "Replace text in a specific range (exact string match)",
                   list(file_path = mk_prop("string", "Path to a document open in RStudio (if not provided, uses active document)"),
@@ -302,8 +307,14 @@ start_mcp_server <- function(port = NULL) {
           }
         }
 
-        output <- capture.output(result <- eval(parse(text = args$code), envir = envir))
-        combined <- paste(c(output, if (!is.null(result)) capture.output(print(result))), collapse = "\n")
+        output <- capture.output(result <- withVisible(eval(parse(text = args$code), envir = envir)))
+        # If result is visible and not NULL, print it
+        result_output <- if (result$visible && !is.null(result$value)) {
+          capture.output(print(result$value))
+        } else {
+          character(0)
+        }
+        combined <- paste(c(output, result_output), collapse = "\n")
         tryCatch(rstudioapi::executeCommand("refreshEnvironment"), error = function(e) NULL)
         text_response(combined)
 
@@ -346,16 +357,31 @@ start_mcp_server <- function(port = NULL) {
         formatted <- paste(sprintf("%6d\t%s", offset:end_line, selected_lines), collapse = "\n")
         text_response(formatted)
       } else if (tool_name == "insert_text") {
-        ctx <- get_doc_ctx(args)
-        location <- if (!is.null(args$row) && !is.null(args$column)) {
-          rstudioapi::document_position(as.integer(args$row), as.integer(args$column))
-        } else {
-          ctx$selection[[1]]$range$start
+        create_new <- isTRUE(args$create_new)
+        has_file_path <- !is.null(args$file_path) && nzchar(args$file_path)
+
+        # Validate parameter combination
+        if (create_new && has_file_path) {
+          stop("Cannot specify both create_new=true and file_path. Use create_new to create a new document, or file_path to edit an existing one.")
         }
-        rstudioapi::insertText(location = location, text = args$text, id = ctx$id)
-        row_num <- if (is.null(args$row)) location["row"] else args$row
-        col_num <- if (is.null(args$column)) location["column"] else args$column
-        text_response(paste0("Text inserted at row ", row_num, ", column ", col_num))
+
+        if (create_new) {
+          # Create new document
+          doc_id <- rstudioapi::documentNew(text = args$text, type = "r", execute = FALSE)
+          text_response(paste0("Created new document with ID: ", doc_id))
+        } else {
+          # Edit existing document
+          ctx <- get_doc_ctx(args)
+          location <- if (!is.null(args$row) && !is.null(args$column)) {
+            rstudioapi::document_position(as.integer(args$row), as.integer(args$column))
+          } else {
+            ctx$selection[[1]]$range$start
+          }
+          rstudioapi::insertText(location = location, text = args$text, id = ctx$id)
+          row_num <- if (is.null(args$row)) location["row"] else args$row
+          col_num <- if (is.null(args$column)) location["column"] else args$column
+          text_response(paste0("Text inserted at row ", row_num, ", column ", col_num))
+        }
 
       } else if (tool_name == "replace_text_range") {
         ctx <- get_doc_ctx(args)
@@ -439,10 +465,10 @@ start_mcp_server <- function(port = NULL) {
         max_length <- if (!is.null(args$max_length)) as.integer(args$max_length) else 10000
         offset <- if (!is.null(args$offset)) as.integer(args$offset) else 0
 
-        if (is.null(.viewer_env$last_url)) {
+        if (is.null(.rstudiomcp_env$last_url)) {
           stop("No viewer content found. Make sure something is displayed in the RStudio Viewer pane.")
         }
-        viewer_url <- .viewer_env$last_url
+        viewer_url <- .rstudiomcp_env$last_url
         if (!file.exists(viewer_url) && !grepl("^https?://", viewer_url)) {
           stop("Viewer content not found at: ", viewer_url)
         }
@@ -511,7 +537,27 @@ start_mcp_server <- function(port = NULL) {
       # POST requests to root endpoint (Streamable HTTP transport)
       if (req$PATH_INFO == "/" && req$REQUEST_METHOD == "POST") {
         body <- rawToChar(req$rook.input$read())
-        msg <- jsonlite::fromJSON(body, simplifyVector = FALSE)
+
+        # Parse JSON with error handling
+        msg <- tryCatch(
+          jsonlite::fromJSON(body, simplifyVector = FALSE),
+          error = function(e) {
+            # Return JSON-RPC parse error
+            headers$"Content-Type" <- "application/json"
+            return(list(
+              status = 200L,
+              headers = headers,
+              body = jsonlite::toJSON(list(
+                jsonrpc = "2.0",
+                id = NULL,
+                error = list(code = -32700, message = "Parse error")
+              ), auto_unbox = TRUE)
+            ))
+          }
+        )
+
+        # If parse failed, msg is already a response list
+        if (!is.null(msg$status)) return(msg)
 
         response <- if (msg$method == "initialize") {
           handle_initialize(msg$id, msg$params)
@@ -547,18 +593,18 @@ start_mcp_server <- function(port = NULL) {
     }
   )
 
-  .mcp_env$server <- httpuv::startServer("127.0.0.1", port, app)
-  .mcp_env$port <- port
+  .rstudiomcp_env$server <- httpuv::startServer("127.0.0.1", port, app)
+  .rstudiomcp_env$port <- port
 
   # Store persistent reference (survives devtools::load_all)
-  set_server_ref(.mcp_env$server, port)
+  set_server_ref(.rstudiomcp_env$server, port)
 
   message("MCP Server started successfully!")
   message("Endpoint: http://localhost:", port)
   message("Transport: Streamable HTTP (JSON responses, no SSE)")
   message("Run stop_mcp_server() to stop the server")
 
-  invisible(.mcp_env$server)
+  invisible(.rstudiomcp_env$server)
 }
 
 #' Stop MCP Server
@@ -571,10 +617,10 @@ stop_mcp_server <- function() {
   port <- get_mcp_port()
 
   # Stop server from current namespace
-  if (!is.null(.mcp_env$server)) {
-    httpuv::stopServer(.mcp_env$server)
-    .mcp_env$server <- NULL
-    .mcp_env$port <- NULL
+  if (!is.null(.rstudiomcp_env$server)) {
+    httpuv::stopServer(.rstudiomcp_env$server)
+    .rstudiomcp_env$server <- NULL
+    .rstudiomcp_env$port <- NULL
     stopped <- TRUE
   }
 
@@ -623,12 +669,12 @@ restart_mcp_server <- function() {
 #'
 #' @export
 mcp_status <- function() {
-  if (is.null(.mcp_env$server)) {
+  if (is.null(.rstudiomcp_env$server)) {
     message("MCP Server is not running")
     return(FALSE)
   } else {
-    message("MCP Server is running on port ", .mcp_env$port)
-    message("Endpoint: http://localhost:", .mcp_env$port)
+    message("MCP Server is running on port ", .rstudiomcp_env$port)
+    message("Endpoint: http://localhost:", .rstudiomcp_env$port)
     message("Transport: Streamable HTTP (JSON responses, no SSE)")
     return(TRUE)
   }

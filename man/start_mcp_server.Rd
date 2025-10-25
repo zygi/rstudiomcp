@@ -4,11 +4,14 @@
 \alias{start_mcp_server}
 \title{Start MCP Server}
 \usage{
-start_mcp_server(port = NULL)
+start_mcp_server(port = NULL, .test_mode = FALSE)
 }
 \arguments{
 \item{port}{Port number for the server (default: from settings or 3000)}
+
+\item{.test_mode}{Internal parameter for testing, bypasses RStudio check}
 }
 \description{
 Launches the MCP server for Claude Code integration via SSE transport
 }
+\keyword{internal}

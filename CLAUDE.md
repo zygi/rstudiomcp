@@ -14,6 +14,11 @@ MCP (Model Context Protocol) server for RStudio. Allows Claude Code to interact 
 ### Server Binding
 - Uses `127.0.0.1` (localhost only), NOT `0.0.0.0` (security - no external network access)
 
+### Package Environment
+- Single environment `.rstudiomcp_env` holds all package state (server, port, SSE connections, viewer tracking)
+- Finalizer attached to `.rstudiomcp_env` for cleanup on R session exit
+- Isolated with `parent = emptyenv()` to avoid namespace pollution
+
 ### Auto-load System
 - Project-level `.Rprofile` modification (not user-level)
 - Opt-in via `setup_autoload()`, requires user confirmation

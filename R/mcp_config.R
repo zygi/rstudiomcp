@@ -26,7 +26,7 @@ add_to_mcp_config <- function() {
 
   config$mcpServers$rstudio <- list(
     type = "http",
-    url = paste0("http://127.0.0.1:", get_mcp_port())
+    url = paste0("http://127.0.0.1:", get_mcp_port(), "/")
   )
 
   write_config(config, path)
@@ -43,9 +43,15 @@ remove_from_mcp_config <- function() {
   if (is.null(config$mcpServers$rstudio)) return(invisible(FALSE))
 
   config$mcpServers$rstudio <- NULL
-  if (length(config$mcpServers) == 0) config$mcpServers <- empty_obj()
 
-  write_config(config, path)
-  message("Removed RStudio MCP server from ", path)
+  # If this was the last MCP server, delete the file
+  if (length(config$mcpServers) == 0) {
+    unlink(path)
+    message("Removed .mcp.json (no MCP servers remaining)")
+  } else {
+    write_config(config, path)
+    message("Removed RStudio MCP server from ", path)
+  }
+
   invisible(TRUE)
 }

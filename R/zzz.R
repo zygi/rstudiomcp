@@ -1,11 +1,8 @@
 # Package hooks
 
-.viewer_env <- new.env(parent = emptyenv())
-.viewer_env$last_url <- NULL
-
 .onLoad <- function(libname, pkgname) {
-  if (!interactive() || Sys.getenv("RSTUDIO") != "1") {
-    if (interactive() && Sys.getenv("RSTUDIO") != "1") {
+  if (!interactive() || !rstudioapi::isAvailable()) {
+    if (interactive() && !rstudioapi::isAvailable()) {
       packageStartupMessage("Note: rstudiomcp requires RStudio IDE. Package loaded but server not started.")
     }
     return()
@@ -25,18 +22,24 @@
 
   # Set up viewer tracking (wraps viewer to capture URLs)
   tryCatch({
-    .viewer_env$original_viewer <- getOption("viewer")
-    options(viewer = function(url, height = NULL) {
-      .viewer_env$last_url <- url
-      .viewer_env$original_viewer(url, height)
-    })
+    .rstudiomcp_env$original_viewer <- getOption("viewer")
+    # Only wrap if original viewer exists and is a function
+    if (is.function(.rstudiomcp_env$original_viewer)) {
+      options(viewer = function(url, height = NULL) {
+        .rstudiomcp_env$last_url <- url
+        .rstudiomcp_env$original_viewer(url, height)
+      })
+    }
   }, error = function(e) {
     message("Warning: Failed to set up viewer tracking: ", e$message)
   })
 
-  # Register exit handler (don't remove from .mcp.json to avoid race conditions)
-  reg.finalizer(.mcp_env, function(e) {
-    tryCatch(stop_mcp_server(), error = function(err) {
+  # Register exit handler
+  reg.finalizer(.rstudiomcp_env, function(e) {
+    tryCatch({
+      stop_mcp_server()
+      remove_from_mcp_config()
+    }, error = function(err) {
       message("Warning: Error during finalizer: ", err$message)
     })
   }, onexit = TRUE)
@@ -61,8 +64,8 @@
     }
 
     # Restore viewer
-    if (!is.null(.viewer_env$original_viewer)) {
-      options(viewer = .viewer_env$original_viewer)
+    if (!is.null(.rstudiomcp_env$original_viewer)) {
+      options(viewer = .rstudiomcp_env$original_viewer)
     }
   }, error = function(e) {
     message("Warning during .onDetach: ", e$message)
