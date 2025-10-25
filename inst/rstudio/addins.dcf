@@ -1,0 +1,24 @@
+Name: Enable Auto-load (per project)
+Description: Add rstudiomcp to .Rprofile for automatic startup
+Binding: setup_autoload
+Interactive: true
+
+Name: Disable Auto-load (per project)
+Description: Remove rstudiomcp from .Rprofile
+Binding: disable_autoload
+Interactive: true
+
+Name: Configure MCP Server
+Description: Configure MCP server settings (port, etc.)
+Binding: configure_mcp_server
+Interactive: true
+
+Name: Restart MCP Server
+Description: Restart the MCP server (useful for connection issues)
+Binding: restart_mcp_server
+Interactive: false
+
+Name: MCP Server Status
+Description: Check if MCP server is running
+Binding: mcp_status
+Interactive: true

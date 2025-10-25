@@ -1,0 +1,31 @@
+Package: rstudiomcp
+Type: Package
+Title: RStudio MCP Server for Claude Code Integration
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Zygimantas", "Straznickas",
+      email = "hi@zygi.me",
+      role = c("aut", "cre")
+    )
+  )
+Description: Provides an MCP (Model Context Protocol) server that allows
+    Claude Code to interact with your RStudio session, including executing
+    R code, inspecting the environment, and accessing workspace objects.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends:
+    R (>= 3.6.0)
+SystemRequirements: RStudio (>= 1.3)
+Imports:
+    jsonlite,
+    httpuv,
+    shiny,
+    miniUI,
+    rstudioapi,
+    base64enc
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+RoxygenNote: 7.3.3
