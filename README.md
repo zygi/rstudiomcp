@@ -18,11 +18,13 @@ This R package runs a local MCP server inside your RStudio session, allowing Cla
 <summary>
 You'll probably want Claude Code installed to use with RStudio. Claude Code installation instructions:
 </summary>
+  
 If you know how to use the command line, just follow the [official instructions](https://docs.claude.com/en/docs/claude-code/setup).
 Otherwise, ask Claude (or your preferred AI assistant) this:
-```
-Please help me install Claude Code. The latest instructions are at https://docs.claude.com/en/docs/claude-code/setup - you should fetch them. Please ask me about what system I use - Windows, WSL, MacOS, Linux, and based on that walk me through. Thanks!
-```
+
+> Please help me install Claude Code. The latest instructions are at https://docs.claude.com/en/docs/claude-code/setup - you should fetch them. Please ask me about what system I use - Windows, WSL, MacOS, Linux, and based on that walk me through. Thanks!
+
+
 </details>
 
 
