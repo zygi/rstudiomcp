@@ -38,7 +38,7 @@ remotes::install_github("zygi/rstudiomcp")
 <details><summary>Video guide</summary>
 
 
-https://github.com/user-attachments/assets/4c955f88-b1f4-449c-856b-e69b47c023f6
+https://github.com/user-attachments/assets/3b345237-6133-443b-bd4a-c05b0045bdbc
 
 
 </details>
