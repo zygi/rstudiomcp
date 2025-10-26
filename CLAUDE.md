@@ -13,11 +13,18 @@ MCP (Model Context Protocol) server for RStudio. Allows Claude Code to interact 
 
 ### Server Binding
 - Uses `127.0.0.1` (localhost only), NOT `0.0.0.0` (security - no external network access)
+- Default port: 16751 (configurable via `configure_mcp_server()`)
 
 ### Package Environment
 - Single environment `.rstudiomcp_env` holds all package state (server, port, SSE connections, viewer tracking)
 - Finalizer attached to `.rstudiomcp_env` for cleanup on R session exit
 - Isolated with `parent = emptyenv()` to avoid namespace pollution
+
+### Package Dependencies
+- Core: `jsonlite`, `httpuv`, `rstudioapi`
+- UI: `shiny`, `miniUI`
+- Utilities: `base64enc`, `glue`
+- Dev: `roxygen2` (>= 7.3.3) for documentation generation
 
 ### Auto-load System
 - Project-level `.Rprofile` modification (not user-level)
@@ -42,11 +49,13 @@ MCP (Model Context Protocol) server for RStudio. Allows Claude Code to interact 
 - **Can activate saved documents**: Use `documentOpen(path)` or `navigateToFile(path)`
 - **Can read any document by ID**: `getSourceEditorContext(id = doc_id)` works for any open document
 - **Can edit any document by ID**: `insertText(..., id = doc_id)` and similar work
+- **Cannot save untitled to specific path**: `documentSave(id)` has no path parameter, would prompt user interactively. Workaround: write contents to file with `writeLines()`, then `documentOpen()` the saved file
 
 #### Other Tool Principles
 - `replace_text_range`: Exact string match, shows ±3 lines context, must be unique in document
 - `eval_r`: Has `allow_reassign` param - only true if expecting to overwrite existing vars
 - `create_document`: Returns document ID for potential future operations (via eval_r). If path is provided, creates a saved document; otherwise creates untitled
+- `source_active_document`: Accepts optional `start_line` and `end_line` parameters to source only specific lines. After sourcing, automatically selects those lines in the editor for visual feedback
 
 ### Process Killing (Fallback for Orphaned Servers)
 - OS-level: Windows uses `cmd /c "netstat -ano | findstr :PORT"`, macOS/Linux uses `lsof -ti:PORT`
@@ -55,9 +64,15 @@ MCP (Model Context Protocol) server for RStudio. Allows Claude Code to interact 
 
 ### Testing
 - Python integration tests use `pytest` with `mcp` client library
-- Tests cover all tools including document operations
+- 16 tests total covering all tools including document operations
 - Document tests verify the active document workflow
-- Use temporary files for testing `open_document_file`
+- Tests include both untitled and saved document creation
+- Use temporary files for testing `open_document_file` and `create_document` with path
+
+### Code Style
+- Line length limit: 80 characters (tidyverse style guide)
+- Long strings use `glue::glue()` with `\\` backslash continuation for multiline
+- styler can auto-format code but cannot automatically break long lines by character count
 
 ## Common Pitfalls
 1. **Empty JSON objects**: Use `names(obj) <- character(0)`, NOT just `list()` (becomes array `[]` not object `{}`)
@@ -81,21 +96,33 @@ All debug messages use `[DEBUG]` prefix - search/replace to remove for release.
 ## Server Instructions
 Set in `handle_initialize()` result under `instructions` field. Appears in Claude Code's system prompt. Should clearly explain the active document workflow.
 
-## Document Workflow Example
+## Document Workflow Examples
+
+### Untitled Document
 ```r
-# Client workflow - untitled document:
 1. create_document("x <- 1")             # Returns ID, becomes active
 2. insert_text("\ny <- 2")               # Adds to active doc
 3. get_active_document()                  # Reads active doc (shows ID, path, contents)
-4. source_active_document()               # Runs active doc
+4. source_active_document()               # Runs all lines
+```
 
-# Client workflow - saved document:
+### Saved Document
+```r
 1. create_document("x <- 1", "/path/to/script.R")  # Creates saved file, becomes active
 2. replace_text_range("old", "new")                 # Edits active doc
 3. source_active_document()                         # Runs active doc
+```
 
-# Or open existing file:
+### Open Existing File
+```r
 1. open_document_file("/path/to/script.R")  # Opens and activates
 2. replace_text_range("old", "new")          # Edits active doc
 3. source_active_document()                   # Runs active doc
+```
+
+### Partial Sourcing
+```r
+1. create_document("line1\nline2\nline3\nline4")  # Create multi-line doc
+2. source_active_document(start_line=2, end_line=3)  # Runs only lines 2-3
+   # Lines 2-3 are automatically selected in editor for visual feedback
 ```

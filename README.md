@@ -43,6 +43,17 @@ Use the RStudio Addin: **"Enable Auto-load (per project)"**
 
 This adds `library(rstudiomcp)` to your project's `.Rprofile` configuration, so the server starts automatically when you open the project.
 
+Restart your RStudio session after enabling auto-load. You should see the following output:
+```
+Starting MCP Server on http://localhost:16751
+MCP Server started successfully!
+Endpoint: http://localhost:16751
+Transport: Streamable HTTP (JSON responses, no SSE)
+Run stop_mcp_server() to stop the server
+Added RStudio MCP server to C:/Users/zygi/Documents/test_proj/.mcp.json
+```
+
+
 ### Option 2: Manual start (For development/testing)
 
 ```r
