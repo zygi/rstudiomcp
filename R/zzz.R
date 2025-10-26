@@ -44,7 +44,10 @@
           start_mcp_server() # This will call add_to_mcp_config() internally
         },
         error = function(e) {
-          packageStartupMessage("ERROR: Failed to start MCP server: ", e$message)
+          packageStartupMessage(
+            "ERROR: Failed to start MCP server: ",
+            e$message
+          )
           packageStartupMessage("Port ", get_mcp_port(), " may be in use.")
           packageStartupMessage("Change port via configure_mcp_server()")
         }
@@ -72,16 +75,23 @@
   tryCatch(
     {
       # ONLY stop the server if we have the persistent reference
-      # (proof that it's our server). Never arbitrarily stop servers via listServers().
+      # (proof that it's our server).
+      # Never arbitrarily stop servers via listServers().
       old_ref <- get_server_ref()
 
       if (!is.null(old_ref)) {
         port <- get_mcp_port()
         ref_port <- tryCatch(old_ref$server$getPort(), error = function(e) NULL)
         if (!is.null(ref_port) && ref_port == port) {
-          tryCatch(old_ref$server$stop(), error = function(e) {
-            message("Warning during .onDetach: failed to stop server: ", e$message)
-          })
+          tryCatch(
+            old_ref$server$stop(),
+            error = function(e) {
+              message(
+                "Warning during .onDetach: failed to stop server: ",
+                e$message
+              )
+            }
+          )
         }
       }
 

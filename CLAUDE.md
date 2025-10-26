@@ -31,7 +31,7 @@ MCP (Model Context Protocol) server for RStudio. Allows Claude Code to interact 
 - **Tools affected**: `insert_text`, `replace_text_range`, `get_active_document`, `source_active_document`
 - **Workflow**:
   1. To work with a document, first make it active using:
-     - `create_untitled_document(text)` - creates new doc, becomes active automatically
+     - `create_document(text, path=None)` - creates new doc (saved or untitled), becomes active automatically
      - `open_document_file(file_path)` - opens/refocuses saved file
   2. Then use document tools on the now-active document
 - **Why**: Aligns with rstudioapi's capabilities (see limitations below)
@@ -46,7 +46,7 @@ MCP (Model Context Protocol) server for RStudio. Allows Claude Code to interact 
 #### Other Tool Principles
 - `replace_text_range`: Exact string match, shows ±3 lines context, must be unique in document
 - `eval_r`: Has `allow_reassign` param - only true if expecting to overwrite existing vars
-- `create_untitled_document`: Returns document ID for potential future operations (via eval_r)
+- `create_document`: Returns document ID for potential future operations (via eval_r). If path is provided, creates a saved document; otherwise creates untitled
 
 ### Process Killing (Fallback for Orphaned Servers)
 - OS-level: Windows uses `cmd /c "netstat -ano | findstr :PORT"`, macOS/Linux uses `lsof -ti:PORT`
@@ -83,13 +83,18 @@ Set in `handle_initialize()` result under `instructions` field. Appears in Claud
 
 ## Document Workflow Example
 ```r
-# Client workflow:
-1. create_untitled_document("x <- 1")  # Returns ID, becomes active
-2. insert_text("\ny <- 2")             # Adds to active doc
-3. get_active_document()                # Reads active doc (shows ID, path, contents)
-4. source_active_document()             # Runs active doc
+# Client workflow - untitled document:
+1. create_document("x <- 1")             # Returns ID, becomes active
+2. insert_text("\ny <- 2")               # Adds to active doc
+3. get_active_document()                  # Reads active doc (shows ID, path, contents)
+4. source_active_document()               # Runs active doc
 
-# Or with saved files:
+# Client workflow - saved document:
+1. create_document("x <- 1", "/path/to/script.R")  # Creates saved file, becomes active
+2. replace_text_range("old", "new")                 # Edits active doc
+3. source_active_document()                         # Runs active doc
+
+# Or open existing file:
 1. open_document_file("/path/to/script.R")  # Opens and activates
 2. replace_text_range("old", "new")          # Edits active doc
 3. source_active_document()                   # Runs active doc

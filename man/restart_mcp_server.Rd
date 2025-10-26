@@ -7,5 +7,6 @@
 restart_mcp_server()
 }
 \description{
-Stops and restarts the MCP server. Useful for recovering from connection issues.
+Stops and restarts the MCP server.
+Useful for recovering from connection issues.
 }

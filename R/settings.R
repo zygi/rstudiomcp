@@ -24,7 +24,9 @@ set_pref <- function(name, value) {
   options(opts)
   tryCatch(
     rstudioapi::writePreference(opt_name, value),
-    error = function(e) message("Warning: Failed to write preference: ", e$message)
+    error = function(e) {
+      message("Warning: Failed to write preference: ", e$message)
+    }
   )
   invisible(value)
 }
@@ -64,7 +66,9 @@ configure_mcp_server <- function() {
           value = get_mcp_port(),
           min = 1024, max = 65535, step = 1
         ),
-        shiny::checkboxInput("auto_start", "Auto-start server when package loads",
+        shiny::checkboxInput(
+          "auto_start",
+          "Auto-start server when package loads",
           value = get_mcp_auto_start()
         ),
         shiny::hr(),
@@ -94,7 +98,8 @@ configure_mcp_server <- function() {
     shiny::observeEvent(input$restart, {
       save_settings()
       if (!is.null(.rstudiomcp_env$server)) stop_mcp_server()
-      start_mcp_server(port = input$port) # This will call add_to_mcp_config() internally
+      # This will call add_to_mcp_config() internally
+      start_mcp_server(port = input$port)
       shiny::showNotification(paste0("Server restarted on port ", input$port),
         type = "message", duration = 3
       )
@@ -105,7 +110,11 @@ configure_mcp_server <- function() {
     shiny::observeEvent(input$cancel, shiny::stopApp())
   }
 
-  viewer <- shiny::dialogViewer("MCP Server Settings", width = 400, height = 350)
+  viewer <- shiny::dialogViewer(
+    "MCP Server Settings",
+    width = 400,
+    height = 350
+  )
   shiny::runGadget(ui, server, viewer = viewer)
 }
 
@@ -145,9 +154,15 @@ setup_autoload <- function() {
   }
 
   # Warn user
-  message("This will add auto-load code for rstudiomcp to your project .Rprofile")
+  message(
+    "This will add auto-load code for rstudiomcp ",
+    "to your project .Rprofile"
+  )
   message("Location: ", rprofile_path)
-  message("\nNote: This is project-specific. Other projects will need separate setup.")
+  message(
+    "\nNote: This is project-specific. ",
+    "Other projects will need separate setup."
+  )
 
   if (interactive()) {
     response <- readline("Continue? (yes/no): ")

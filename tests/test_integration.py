@@ -48,7 +48,7 @@ async def get_session():
 
 
 def extract_doc_id_from_insert(result_text):
-    """Extract document ID from create_untitled_document result"""
+    """Extract document ID from create_document result"""
     return result_text.split("ID:")[1].strip()
 
 
@@ -113,7 +113,7 @@ async def test_list_tools():
             expected_tools = [
                 "eval_r", "list_environments", "list_objects", "get_object",
                 "get_console_history", "get_active_document",
-                "create_untitled_document", "open_document_file",
+                "create_document", "open_document_file",
                 "insert_text", "replace_text_range", "source_active_document",
                 "get_current_plot", "get_latest_viewer_content"
             ]
@@ -241,13 +241,13 @@ async def test_get_console_history():
 
 
 @pytest.mark.asyncio
-async def test_create_untitled_document():
-    """Test creating a new untitled document"""
+async def test_create_document():
+    """Test creating a new document (untitled)"""
     async with await get_session() as (read_stream, write_stream, _):
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
 
-            result = await session.call_tool("create_untitled_document", {
+            result = await session.call_tool("create_document", {
                 "text": "# Test document\nprint('Hello')\n"
             })
 
@@ -270,6 +270,56 @@ async def test_create_untitled_document():
 
 
 @pytest.mark.asyncio
+async def test_create_document_with_path():
+    """Test creating a new document with a file path"""
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+
+            # Create a temporary file path
+            temp_file = "test_create_with_path.R"
+            result = await session.call_tool("eval_r", {
+                "code": f'file.path(tempdir(), "{temp_file}")',
+                "allow_reassign": True
+            })
+            temp_path = result.content[0].text.strip().replace('[1] "', '').replace('"', '')
+
+            # Create a document with path
+            result = await session.call_tool("create_document", {
+                "text": "# Saved test\nx <- 42\nprint(x)",
+                "path": temp_path
+            })
+
+            response_text = result.content[0].text
+            assert "Created new document at:" in response_text
+            assert temp_file in response_text
+
+            # Extract document ID
+            doc_id = extract_doc_id_from_insert(response_text)
+
+            # Verify it's active and has a proper path
+            result = await session.call_tool("get_active_document", {})
+            contents = result.content[0].text
+            assert "ID:" in contents
+            assert temp_file in contents  # Path should contain filename
+            assert "# Saved test" in contents
+            assert "x <- 42" in contents
+
+            # Verify file exists on disk
+            result = await session.call_tool("eval_r", {
+                "code": f'file.exists("{temp_path}")'
+            })
+            assert "TRUE" in result.content[0].text
+
+            # Clean up
+            await cleanup_document(session, doc_id)
+            await session.call_tool("eval_r", {
+                "code": f'unlink("{temp_path}")',
+                "allow_reassign": True
+            })
+
+
+@pytest.mark.asyncio
 async def test_insert_text_active_document():
     """Test inserting text into the active document"""
     async with await get_session() as (read_stream, write_stream, _):
@@ -277,7 +327,7 @@ async def test_insert_text_active_document():
             await session.initialize()
 
             # Create a document
-            result = await session.call_tool("create_untitled_document", {
+            result = await session.call_tool("create_document", {
                 "text": "# Original content"
             })
             doc_id = extract_doc_id_from_insert(result.content[0].text)
@@ -349,7 +399,7 @@ async def test_replace_text_range_active():
             await session.initialize()
 
             # Create a document
-            result = await session.call_tool("create_untitled_document", {
+            result = await session.call_tool("create_document", {
                 "text": "old_value <- 123"
             })
             doc_id = extract_doc_id_from_insert(result.content[0].text)
@@ -378,7 +428,7 @@ async def test_source_active_document():
             await session.initialize()
 
             # Create a document with R code
-            result = await session.call_tool("create_untitled_document", {
+            result = await session.call_tool("create_document", {
                 "text": "source_test_var <- 999"
             })
             doc_id = extract_doc_id_from_insert(result.content[0].text)
@@ -392,6 +442,56 @@ async def test_source_active_document():
             # Verify variable was created
             result = await session.call_tool("list_objects", {})
             assert "source_test_var" in result.content[0].text
+
+            # Clean up
+            await cleanup_document(session, doc_id)
+
+
+@pytest.mark.asyncio
+async def test_source_active_document_partial():
+    """Test sourcing only specific lines of the active document"""
+    async with await get_session() as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+
+            # Create a document with multiple lines
+            result = await session.call_tool("create_document", {
+                "text": "var_a <- 1\nvar_b <- 2\nvar_c <- 3\nvar_d <- 4"
+            })
+            doc_id = extract_doc_id_from_insert(result.content[0].text)
+
+            # Source only lines 2-3
+            result = await session.call_tool("source_active_document", {
+                "start_line": 2,
+                "end_line": 3
+            })
+
+            assert "(lines 2-3)" in result.content[0].text
+            assert "var_b <- 2" in result.content[0].text
+            assert "var_c <- 3" in result.content[0].text
+
+            # Verify only var_b and var_c were created
+            result = await session.call_tool("list_objects", {})
+            objects = result.content[0].text
+            assert "var_b" in objects
+            assert "var_c" in objects
+            # var_a and var_d should not exist
+            assert "var_a" not in objects
+            assert "var_d" not in objects
+
+            # Verify that lines 2-3 are now selected in the editor
+            result = await session.call_tool("eval_r", {
+                "code": """
+                ctx <- rstudioapi::getSourceEditorContext()
+                sel <- ctx$selection[[1]]$range
+                list(start = sel$start[['row']], end = sel$end[['row']])
+                """
+            })
+            selection_info = result.content[0].text
+            # Should show that rows 2-3 are selected
+            assert "start" in selection_info
+            assert "2" in selection_info  # Start line should be 2
+            assert "3" in selection_info  # End line should be 3
 
             # Clean up
             await cleanup_document(session, doc_id)

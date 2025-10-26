@@ -14,7 +14,11 @@ get_server_ref <- function() {
 }
 
 set_server_ref <- function(server, port) {
-  assign(".rstudiomcp_server", list(server = server, port = port), envir = .GlobalEnv)
+  assign(
+    ".rstudiomcp_server",
+    list(server = server, port = port),
+    envir = .GlobalEnv
+  )
 }
 
 clear_server_ref <- function() {
@@ -57,8 +61,14 @@ kill_process_on_port <- function(port, ask_confirmation = TRUE) {
 
   # Check if the PID is the current R process
   if (pid == as.character(Sys.getpid())) {
-    message("ERROR: Port ", port, " is being used by an orphaned httpuv server in the current R session.")
-    message("Cannot kill current R process. Please restart R session or change port with configure_mcp_server()")
+    message(
+      "ERROR: Port ", port,
+      " is being used by an orphaned httpuv server in the current R session."
+    )
+    message(
+      "Cannot kill current R process. ",
+      "Please restart R session or change port with configure_mcp_server()"
+    )
     return(FALSE)
   }
 
@@ -71,7 +81,11 @@ kill_process_on_port <- function(port, ask_confirmation = TRUE) {
   }
 
   if (should_kill) {
-    kill_cmd <- if (os_type == "Windows") paste0("taskkill /PID ", pid, " /F") else paste0("kill -9 ", pid)
+    kill_cmd <- if (os_type == "Windows") {
+      paste0("taskkill /PID ", pid, " /F")
+    } else {
+      paste0("kill -9 ", pid)
+    }
     result <- tryCatch(
       {
         system(kill_cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
@@ -126,7 +140,9 @@ stop_orphaned_server <- function(port, ask_confirmation = TRUE) {
         }
       )
     } else {
-      message("Orphaned server not stopped. Port ", port, " may still be in use.")
+      message(
+        "Orphaned server not stopped. Port ", port, " may still be in use."
+      )
       return(FALSE)
     }
   }
@@ -186,7 +202,8 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
     port <- get_mcp_port()
   }
 
-  # Check for orphaned server from previous namespace (survives devtools::load_all)
+  # Check for orphaned server from previous namespace
+  # (survives devtools::load_all)
   old_ref <- get_server_ref()
   if (!is.null(old_ref)) {
     message("Found existing server, stopping it first...")
@@ -210,7 +227,10 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
 
   # Check for and stop any orphaned servers on this port
   if (!stop_orphaned_server(port, ask_confirmation = TRUE)) {
-    stop("Cannot start server: port ", port, " is in use. Change port with configure_mcp_server()")
+    stop(
+      "Cannot start server: port ", port,
+      " is in use. Change port with configure_mcp_server()"
+    )
   }
 
   message("Starting MCP Server on http://localhost:", port)
@@ -230,7 +250,21 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
         capabilities = list(
           tools = list(listChanged = FALSE) # Static tool list
         ),
-        instructions = "This server provides access to an active RStudio session. You can execute R code, inspect the environment and objects, edit documents, source scripts, and capture plots. All document editing tools (insert_text, replace_text_range, get_active_document, source_active_document) work on the CURRENTLY ACTIVE document only. To work with a specific document: (1) use create_untitled_document to create a new one (becomes active automatically), OR (2) use open_document_file to open/focus a saved file. After that, all document operations apply to that now-active document. Your API doesn't allow you to list or navigate between open documents. Don't destroy the user's work - only perform mutable non-undoable actions like eval_r or source_active_document if the user expects that. IMPORTANT: WHEN DOING SOMETHING DESTRUCTIVE, LIKE DELETING FILES OR FORCIBLY CLOSING DOCUMENTS, ALWAYS ASK THE USER FIRST."
+        instructions = glue::glue("
+          This server provides access to an active RStudio session. \\
+          You can execute R code, inspect the environment and objects, edit documents, source scripts, and capture plots. \\
+          All document editing tools (insert_text, replace_text_range, get_active_document, source_active_document) \\
+          work on the CURRENTLY ACTIVE document only. \\
+          To work with a specific document: (1) use create_document to create a new one (becomes active automatically), \\
+          OR (2) use open_document_file to open/focus a saved file. \\
+          After that, all document operations apply to that now-active document. \\
+          Your API doesn't allow you to list or navigate between open documents. \\
+          In general, you should prefer to do tiny commands with eval_r, but \\
+          for larger blocks, create them as documents, transiently edit them for small changes, \\
+          and use `source_active_document` on them or parts of them (if you edited them). \\
+          Don't destroy the user's work - only perform mutable non-undoable actions like eval_r or source_active_document if the user expects that. \\
+          IMPORTANT: WHEN DOING SOMETHING DESTRUCTIVE, LIKE DELETING FILES OR FORCIBLY CLOSING DOCUMENTS, ALWAYS ASK THE USER FIRST.
+        ")
       )
     )
   }
@@ -242,80 +276,220 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
       result = list(
         tools = list(
           mk_tool(
-            "eval_r", "Execute R code in the RStudio session. Note that this is intended for short commands - if you're generating long scripts, instead create a new document, and then source it, so the user can easily inspect it.",
+            "eval_r",
+            glue::glue(
+              "Execute R code in the RStudio session. \\
+              Note that this is intended for short commands - \\
+              if you're generating long scripts, instead create a new document, \\
+              and then source it, so the user can easily inspect it."
+            ),
             list(
               code = mk_prop("string", "R code to execute"),
-              envir = mk_prop("string", "Environment name to execute in (default: .GlobalEnv)"),
-              allow_reassign = mk_prop("boolean", "Allow overwriting existing variables (default: false). Only set to true if you expect an object with this name to already exist. If false, will error if code would overwrite existing objects.")
+              envir = mk_prop(
+                "string",
+                "Environment name to execute in (default: .GlobalEnv)"
+              ),
+              allow_reassign = mk_prop(
+                "boolean",
+                glue::glue(
+                  "Allow overwriting existing variables (default: false). \\
+                  Only set to true if you expect an object with this name to already exist. \\
+                  If false, will error if code would overwrite existing objects."
+                )
+              )
             ),
             "code"
           ),
-          mk_tool("list_environments", "List all available environments in the R session"),
           mk_tool(
-            "list_objects", "List object names in the R environment",
-            list(envir = mk_prop("string", "Environment name (default: .GlobalEnv)"))
+            "list_environments",
+            "List all available environments in the R session"
           ),
           mk_tool(
-            "get_object", "Get details about a specific R object (type, class, structure, and preview of contents)",
+            "list_objects",
+            "List object names in the R environment",
+            list(
+              envir = mk_prop(
+                "string",
+                "Environment name (default: .GlobalEnv)"
+              )
+            )
+          ),
+          mk_tool(
+            "get_object",
+            glue::glue(
+              "Get details about a specific R object \\
+              (type, class, structure, and preview of contents)"
+            ),
             list(
               name = mk_prop("string", "Name of the object to inspect"),
-              envir = mk_prop("string", "Environment name to search in (default: .GlobalEnv)")
+              envir = mk_prop(
+                "string",
+                "Environment name to search in (default: .GlobalEnv)"
+              )
             ),
             "name"
           ),
           mk_tool(
-            "get_console_history", "Get the R console command history",
-            list(max_lines = mk_prop("number", "Maximum number of recent commands to return (default: 50)"))
-          ),
-          mk_tool(
-            "get_active_document", "Read the contents of the currently active document in RStudio",
+            "get_console_history",
+            "Get the R console command history",
             list(
-              offset = mk_prop("number", "Line number to start reading from (optional)"),
-              limit = mk_prop("number", "Number of lines to read (optional)")
+              max_lines = mk_prop(
+                "number",
+                "Maximum number of recent commands to return (default: 50)"
+              )
             )
           ),
           mk_tool(
-            "create_untitled_document", "Create a new untitled document with the given text. The new document becomes active automatically.",
-            list(text = mk_prop("string", "Text content for the new document")),
-            "text"
-          ),
-          mk_tool(
-            "open_document_file", "Open a saved document file by path, or refocus it if already open. The document becomes active.",
-            list(file_path = mk_prop("string", "Absolute path to the document file to open")),
-            "file_path"
-          ),
-          mk_tool(
-            "insert_text", "Insert text at cursor position or specific location in the currently active document",
+            "get_active_document",
+            "Read the contents of the currently active document in RStudio",
             list(
-              text = mk_prop("string", "Text to insert"),
-              row = mk_prop("number", "Row number to insert at (optional, uses cursor position if not provided)"),
-              column = mk_prop("number", "Column number to insert at (optional, uses cursor position if not provided)")
+              offset = mk_prop(
+                "number",
+                "Line number to start reading from (optional)"
+              ),
+              limit = mk_prop(
+                "number",
+                "Number of lines to read (optional)"
+              )
+            )
+          ),
+          mk_tool(
+            "create_document",
+            glue::glue(
+              "Create a new document with the given text. \\
+              The new document becomes active automatically."
+            ),
+            list(
+              text = mk_prop("string", "Text content for the new document"),
+              path = mk_prop(
+                "string",
+                glue::glue(
+                  "File path to save the document to (optional). \\
+                  If not provided, creates an untitled document."
+                )
+              )
             ),
             "text"
           ),
           mk_tool(
-            "replace_text_range", "Replace text in the currently active document (exact string match)",
+            "open_document_file",
+            glue::glue(
+              "Open a saved document file by path, or refocus it if already open. \\
+              The document becomes active."
+            ),
+            list(
+              file_path = mk_prop(
+                "string",
+                "Absolute path to the document file to open"
+              )
+            ),
+            "file_path"
+          ),
+          mk_tool(
+            "insert_text",
+            glue::glue(
+              "Insert text at cursor position or specific location \\
+              in the currently active document"
+            ),
+            list(
+              text = mk_prop("string", "Text to insert"),
+              row = mk_prop(
+                "number",
+                glue::glue(
+                  "Row number to insert at \\
+                  (optional, uses cursor position if not provided)"
+                )
+              ),
+              column = mk_prop(
+                "number",
+                glue::glue(
+                  "Column number to insert at \\
+                  (optional, uses cursor position if not provided)"
+                )
+              )
+            ),
+            "text"
+          ),
+          mk_tool(
+            "replace_text_range",
+            glue::glue(
+              "Replace text in the currently active document \\
+              (exact string match)"
+            ),
             list(
               old_string = mk_prop("string", "The text to replace"),
               new_string = mk_prop("string", "The text to replace it with")
             ),
             c("old_string", "new_string")
           ),
-          mk_tool("source_active_document", "Source (run) the currently active R document, like clicking the Source button in RStudio"),
           mk_tool(
-            "get_current_plot", "Capture the plot currently displayed to the user from the Plots pane as an image file.",
+            "source_active_document",
+            glue::glue(
+              "Source (run) the currently active R document, \\
+              like clicking the Source button in RStudio"
+            ),
             list(
-              width = mk_prop("number", "Image width in pixels (default: 800)"),
-              height = mk_prop("number", "Image height in pixels (default: 600)"),
-              format = mk_prop("string", "Image format: png, jpeg, bmp, tiff, svg, eps (default: png)"),
-              screenshot_filepath = mk_prop("boolean", "If false, return a base64 image to the MCP client. If true, save to temp file and return path instead. (default: false)")
+              start_line = mk_prop(
+                "number",
+                "First line to source (optional, defaults to 1)"
+              ),
+              end_line = mk_prop(
+                "number",
+                "Last line to source (optional, defaults to end of document)"
+              )
             )
           ),
           mk_tool(
-            "get_latest_viewer_content", "Get the HTML content of the last rendered page in RStudio Viewer pane (HTML widgets, interactive plots, etc.)",
+            "get_current_plot",
+            glue::glue(
+              "Capture the plot currently displayed to the user \\
+              from the Plots pane as an image file. You don't need to call \\
+              this for the user - they already see it. It's only if you want \\
+              to see it yourself."
+            ),
             list(
-              max_length = mk_prop("number", "Maximum number of characters to return (default: 10000)"),
-              offset = mk_prop("number", "Character offset to start reading from (default: 0, for pagination)")
+              width = mk_prop(
+                "number",
+                "Image width in pixels (default: 800)"
+              ),
+              height = mk_prop(
+                "number",
+                "Image height in pixels (default: 600)"
+              ),
+              format = mk_prop(
+                "string",
+                "Image format: png, jpeg, bmp, tiff, svg, eps (default: png)"
+              ),
+              screenshot_filepath = mk_prop(
+                "boolean",
+                glue::glue(
+                  "If false, return a base64 image to the MCP client. \\
+                  If true, save to temp file and return path instead. \\
+                  (default: false)"
+                )
+              )
+            )
+          ),
+          mk_tool(
+            "get_latest_viewer_content",
+            glue::glue(
+              "Get the HTML content of the last rendered page \\
+              in RStudio Viewer pane (HTML widgets, interactive plots, etc.) \\
+              You don't need to call this for the user - they already see it. \\
+              It's only if you want to see it yourself."
+            ),
+            list(
+              max_length = mk_prop(
+                "number",
+                "Maximum number of characters to return (default: 10000)"
+              ),
+              offset = mk_prop(
+                "number",
+                glue::glue(
+                  "Character offset to start reading from \\
+                  (default: 0, for pagination)"
+                )
+              )
             )
           )
         )
@@ -338,17 +512,25 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
               error = function(e) character(0)
             )
             if (length(assignments) > 0) {
-              existing <- assignments[sapply(assignments, exists, envir = envir)]
+              existing <- assignments[
+                sapply(assignments, exists, envir = envir)
+              ]
               if (length(existing) > 0) {
                 stop(
-                  "Code would overwrite existing variable(s): ", paste(existing, collapse = ", "), "\n",
-                  "Set allow_reassign=true to allow modifications, or use different variable names."
+                  "Code would overwrite existing variable(s): ",
+                  paste(existing, collapse = ", "), "\n",
+                  "Set allow_reassign=true to allow modifications, ",
+                  "or use different variable names."
                 )
               }
             }
           }
 
-          output <- capture.output(result <- withVisible(eval(parse(text = args$code), envir = envir)))
+          output <- capture.output(
+            result <- withVisible(
+              eval(parse(text = args$code), envir = envir)
+            )
+          )
           # If result is visible and not NULL, print it
           result_output <- if (result$visible && !is.null(result$value)) {
             capture.output(print(result$value))
@@ -356,27 +538,44 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
             character(0)
           }
           combined <- paste(c(output, result_output), collapse = "\n")
-          tryCatch(rstudioapi::executeCommand("refreshEnvironment"), error = function(e) NULL)
+          tryCatch(
+            rstudioapi::executeCommand("refreshEnvironment"),
+            error = function(e) NULL
+          )
           text_response(combined)
         } else if (tool_name == "list_environments") {
           text_response(paste(search(), collapse = "\n"))
         } else if (tool_name == "list_objects") {
           objects <- ls(envir = get_env(args))
-          text_response(if (length(objects) > 0) paste(objects, collapse = "\n") else "(empty environment)")
+          text_response(
+            if (length(objects) > 0) {
+              paste(objects, collapse = "\n")
+            } else {
+              "(empty environment)"
+            }
+          )
         } else if (tool_name == "get_object") {
           if (is.null(args$name)) stop("Object name is required")
           obj <- get(args$name, envir = get_env(args))
           info <- capture.output(print(str(obj)), print(summary(obj)))
           text_response(paste(info, collapse = "\n"))
         } else if (tool_name == "get_console_history") {
-          max_lines <- if (!is.null(args$max_lines)) as.integer(args$max_lines) else 50
+          max_lines <- if (!is.null(args$max_lines)) {
+            as.integer(args$max_lines)
+          } else {
+            50
+          }
           history_lines <- tryCatch(
             {
               temp_file <- tempfile(pattern = "rhistory_", fileext = ".txt")
               savehistory(temp_file)
               all_history <- readLines(temp_file, warn = FALSE)
               unlink(temp_file)
-              if (length(all_history) > max_lines) tail(all_history, max_lines) else all_history
+              if (length(all_history) > max_lines) {
+                tail(all_history, max_lines)
+              } else {
+                all_history
+              }
             },
             error = function(e) paste("Error retrieving history:", e$message)
           )
@@ -389,32 +588,90 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
           header <- paste0("ID: ", ctx$id, "\nPath: ", doc_path, "\n\n")
 
           # Format contents with line numbers
-          all_lines <- ctx$contents # Already a character vector, one element per line
-          offset <- if (!is.null(args$offset)) as.integer(args$offset) else 1
-          limit <- if (!is.null(args$limit)) as.integer(args$limit) else length(all_lines)
+          # Character vector, one element per line
+          all_lines <- ctx$contents
+          offset <- if (!is.null(args$offset)) {
+            as.integer(args$offset)
+          } else {
+            1
+          }
+          limit <- if (!is.null(args$limit)) {
+            as.integer(args$limit)
+          } else {
+            length(all_lines)
+          }
           end_line <- min(offset + limit - 1, length(all_lines))
           selected_lines <- all_lines[offset:end_line]
-          formatted_content <- paste(sprintf("%6d\t%s", offset:end_line, selected_lines), collapse = "\n")
+          formatted_content <- paste(
+            sprintf("%6d\t%s", offset:end_line, selected_lines),
+            collapse = "\n"
+          )
 
           text_response(paste0(header, formatted_content))
-        } else if (tool_name == "create_untitled_document") {
-          doc_id <- rstudioapi::documentNew(text = args$text, type = "r", execute = FALSE)
-          text_response(paste0("Created new document with ID: ", doc_id))
+        } else if (tool_name == "create_document") {
+          # If path is provided, create a saved document
+          # Otherwise create an untitled document
+          if (!is.null(args$path) && nzchar(args$path)) {
+            # Write contents to file
+            lines <- strsplit(args$text, "\n")[[1]]
+            writeLines(lines, args$path)
+            # Open the file
+            doc_id <- rstudioapi::documentOpen(args$path)
+            text_response(
+              paste0(
+                "Created new document at: ", args$path,
+                " (ID: ", doc_id, ")"
+              )
+            )
+          } else {
+            # Create untitled document
+            doc_id <- rstudioapi::documentNew(
+              text = args$text,
+              type = "r",
+              execute = FALSE
+            )
+            text_response(paste0("Created new document with ID: ", doc_id))
+          }
         } else if (tool_name == "open_document_file") {
           # Use documentOpen which opens and focuses the file
           doc_id <- rstudioapi::documentOpen(args$file_path)
-          text_response(paste0("Opened document: ", args$file_path, " (ID: ", doc_id, ")"))
+          text_response(
+            paste0(
+              "Opened document: ", args$file_path,
+              " (ID: ", doc_id, ")"
+            )
+          )
         } else if (tool_name == "insert_text") {
           ctx <- rstudioapi::getSourceEditorContext()
           location <- if (!is.null(args$row) && !is.null(args$column)) {
-            rstudioapi::document_position(as.integer(args$row), as.integer(args$column))
+            rstudioapi::document_position(
+              as.integer(args$row),
+              as.integer(args$column)
+            )
           } else {
             ctx$selection[[1]]$range$start
           }
-          rstudioapi::insertText(location = location, text = args$text, id = ctx$id)
-          row_num <- if (is.null(args$row)) location["row"] else args$row
-          col_num <- if (is.null(args$column)) location["column"] else args$column
-          text_response(paste0("Text inserted at row ", row_num, ", column ", col_num))
+          rstudioapi::insertText(
+            location = location,
+            text = args$text,
+            id = ctx$id
+          )
+          row_num <- if (is.null(args$row)) {
+            location["row"]
+          } else {
+            args$row
+          }
+          col_num <- if (is.null(args$column)) {
+            location["column"]
+          } else {
+            args$column
+          }
+          text_response(
+            paste0(
+              "Text inserted at row ", row_num,
+              ", column ", col_num
+            )
+          )
         } else if (tool_name == "replace_text_range") {
           ctx <- rstudioapi::getSourceEditorContext()
           contents <- paste(ctx$contents, collapse = "\n")
@@ -423,38 +680,111 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
           }
           occurrences <- gregexpr(args$old_string, contents, fixed = TRUE)[[1]]
           if (length(occurrences) > 1 && occurrences[1] != -1) {
-            stop("old_string appears multiple times in document. Please make it more specific.")
+            stop(
+              "old_string appears multiple times in document. ",
+              "Please make it more specific."
+            )
           }
-          new_contents <- sub(args$old_string, args$new_string, contents, fixed = TRUE)
+          new_contents <- sub(
+            args$old_string,
+            args$new_string,
+            contents,
+            fixed = TRUE
+          )
           rstudioapi::setDocumentContents(new_contents, id = ctx$id)
 
           # Show context around the change (like Edit tool)
           new_lines <- strsplit(new_contents, "\n")[[1]]
           # Find line containing the replacement
-          changed_line <- which(grepl(args$new_string, new_lines, fixed = TRUE))[1]
+          changed_line <- which(
+            grepl(args$new_string, new_lines, fixed = TRUE)
+          )[1]
           if (!is.na(changed_line)) {
             start_line <- max(1, changed_line - 3)
             end_line <- min(length(new_lines), changed_line + 3)
             context_lines <- new_lines[start_line:end_line]
-            formatted <- paste(sprintf("%6d\t%s", start_line:end_line, context_lines), collapse = "\n")
-            text_response(paste0("Text replaced successfully. Result:\n\n", formatted))
+            formatted <- paste(
+              sprintf("%6d\t%s", start_line:end_line, context_lines),
+              collapse = "\n"
+            )
+            text_response(
+              paste0("Text replaced successfully. Result:\n\n", formatted)
+            )
           } else {
             text_response("Text replaced successfully")
           }
         } else if (tool_name == "source_active_document") {
           ctx <- rstudioapi::getSourceEditorContext()
 
-          # Source the document
+          # Determine which lines to source
+          all_lines <- ctx$contents
+          start_line <- if (!is.null(args$start_line)) {
+            as.integer(args$start_line)
+          } else {
+            1
+          }
+          end_line <- if (!is.null(args$end_line)) {
+            as.integer(args$end_line)
+          } else {
+            length(all_lines)
+          }
+
+          # Validate line numbers
+          if (start_line < 1 || start_line > length(all_lines)) {
+            stop("start_line must be between 1 and ", length(all_lines))
+          }
+          if (end_line < start_line || end_line > length(all_lines)) {
+            stop(
+              "end_line must be between ", start_line,
+              " and ", length(all_lines)
+            )
+          }
+
+          # Extract selected lines
+          selected_lines <- all_lines[start_line:end_line]
+
+          # Source the selected lines
           temp_file <- tempfile(fileext = ".R")
-          writeLines(ctx$contents, temp_file)
+          writeLines(selected_lines, temp_file)
 
           output <- capture.output({
             source(temp_file, echo = TRUE)
           })
           unlink(temp_file)
 
+          # Select the sourced lines in the editor for visual feedback
+          if (start_line != 1 || end_line != length(all_lines)) {
+            # Only select if sourcing partial content
+            tryCatch(
+              {
+                range_start <- rstudioapi::document_position(start_line, 1)
+                # End position: end of last line (large column to reach end)
+                range_end <- rstudioapi::document_position(end_line, 1000)
+                selection_range <- rstudioapi::document_range(
+                  range_start,
+                  range_end
+                )
+                rstudioapi::setSelectionRanges(selection_range, id = ctx$id)
+              },
+              error = function(e) {
+                # Ignore selection errors (e.g., doc no longer active)
+              }
+            )
+          }
+
           doc_name <- if (nzchar(ctx$path)) basename(ctx$path) else "Untitled"
-          text_response(paste0("Sourced document: ", doc_name, "\n\n", paste(output, collapse = "\n")))
+          line_info <- if (start_line == 1 && end_line == length(all_lines)) {
+            ""
+          } else {
+            paste0(" (lines ", start_line, "-", end_line, ")")
+          }
+          text_response(
+            paste0(
+              "Sourced document: ", doc_name, line_info,
+              "\n\n",
+              paste(output, collapse = "\n")
+            )
+          )
         } else if (tool_name == "get_current_plot") {
           width <- if (!is.null(args$width)) as.integer(args$width) else 800
           height <- if (!is.null(args$height)) as.integer(args$height) else 600
@@ -462,14 +792,38 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
           screenshot_filepath <- isTRUE(args$screenshot_filepath)
 
           valid_formats <- c("png", "jpeg", "bmp", "tiff", "emf", "svg", "eps")
-          if (!(format %in% valid_formats)) stop("Invalid format. Must be one of: ", paste(valid_formats, collapse = ", "))
+          if (!(format %in% valid_formats)) {
+            stop(
+              "Invalid format. Must be one of: ",
+              paste(valid_formats, collapse = ", ")
+            )
+          }
 
-          temp_file <- tempfile(pattern = "rstudio_plot_", fileext = paste0(".", format))
-          rstudioapi::savePlotAsImage(file = temp_file, format = format, width = width, height = height)
-          if (!file.exists(temp_file)) stop("Failed to save plot. Make sure a plot is displayed in the Plots pane.")
+          temp_file <- tempfile(
+            pattern = "rstudio_plot_",
+            fileext = paste0(".", format)
+          )
+          rstudioapi::savePlotAsImage(
+            file = temp_file,
+            format = format,
+            width = width,
+            height = height
+          )
+          if (!file.exists(temp_file)) {
+            stop(
+              "Failed to save plot. ",
+              "Make sure a plot is displayed in the Plots pane."
+            )
+          }
 
           if (screenshot_filepath) {
-            text_response(paste0("Plot saved to: ", temp_file, "\nFormat: ", format, ", Size: ", width, "x", height))
+            text_response(
+              paste0(
+                "Plot saved to: ", temp_file,
+                "\nFormat: ", format,
+                ", Size: ", width, "x", height
+              )
+            )
           } else {
             image_data <- base64enc::base64encode(temp_file)
             unlink(temp_file)
@@ -483,31 +837,52 @@ start_mcp_server <- function(port = NULL, .test_mode = FALSE) {
               "emf" = "image/emf",
               "image/png"
             )
-            list(content = list(list(type = "image", data = image_data, mimeType = mime_type)))
+            list(
+              content = list(
+                list(type = "image", data = image_data, mimeType = mime_type)
+              )
+            )
           }
         } else if (tool_name == "get_latest_viewer_content") {
-          max_length <- if (!is.null(args$max_length)) as.integer(args$max_length) else 10000
+          max_length <- if (!is.null(args$max_length)) {
+            as.integer(args$max_length)
+          } else {
+            10000
+          }
           offset <- if (!is.null(args$offset)) as.integer(args$offset) else 0
 
           if (is.null(.rstudiomcp_env$last_url)) {
-            stop("No viewer content found. Make sure something is displayed in the RStudio Viewer pane.")
+            stop(
+              "No viewer content found. ",
+              "Make sure something is displayed in the RStudio Viewer pane."
+            )
           }
           viewer_url <- .rstudiomcp_env$last_url
           if (!file.exists(viewer_url) && !grepl("^https?://", viewer_url)) {
             stop("Viewer content not found at: ", viewer_url)
           }
 
-          html_content <- tryCatch(paste(readLines(viewer_url, warn = FALSE), collapse = "\n"),
-            error = function(e) stop("Failed to read viewer content: ", e$message)
+          html_content <- tryCatch(
+            paste(readLines(viewer_url, warn = FALSE), collapse = "\n"),
+            error = function(e) {
+              stop("Failed to read viewer content: ", e$message)
+            }
           )
           total_length <- nchar(html_content)
           start_pos <- offset + 1
           end_pos <- min(offset + max_length, total_length)
-          paginated_content <- if (start_pos > total_length) "" else substr(html_content, start_pos, end_pos)
-          text_response(paste0(
-            "HTML content (", start_pos - 1, "-", end_pos, " of ", total_length, " chars):\n\n",
-            paginated_content
-          ))
+          paginated_content <- if (start_pos > total_length) {
+            ""
+          } else {
+            substr(html_content, start_pos, end_pos)
+          }
+          text_response(
+            paste0(
+              "HTML content (", start_pos - 1, "-", end_pos,
+              " of ", total_length, " chars):\n\n",
+              paginated_content
+            )
+          )
         } else {
           stop("Unknown tool: ", tool_name)
         }
@@ -669,7 +1044,10 @@ stop_mcp_server <- function() {
         stopped <- TRUE
       },
       error = function(e) {
-        message("Warning: failed to stop server from persistent ref: ", e$message)
+        message(
+          "Warning: failed to stop server from persistent ref: ",
+          e$message
+        )
       }
     )
     clear_server_ref()
@@ -691,7 +1069,8 @@ stop_mcp_server <- function() {
 
 #' Restart MCP Server
 #'
-#' Stops and restarts the MCP server. Useful for recovering from connection issues.
+#' Stops and restarts the MCP server.
+#' Useful for recovering from connection issues.
 #'
 #' @export
 restart_mcp_server <- function() {

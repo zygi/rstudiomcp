@@ -22,7 +22,10 @@ detect_assignments <- function(code_text) {
     } else if (op == "assign" && length(e) >= 2) {
       var <- e[[2]]
       if (is.character(var) || is.name(var)) {
-        assignments <<- c(assignments, if (is.character(var)) var else as.character(var))
+        assignments <<- c(
+          assignments,
+          if (is.character(var)) var else as.character(var)
+        )
       }
     }
 

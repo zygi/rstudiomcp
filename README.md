@@ -14,6 +14,20 @@ This R package runs a local MCP server inside your RStudio session, allowing Cla
 
 ## Installation
 
+<details>
+<summary>
+You'll probably want Claude Code installed to use with RStudio. Claude Code installation instructions:
+</summary>
+If you know how to use the command line, just follow the [official instructions](https://docs.claude.com/en/docs/claude-code/setup).
+Otherwise, ask Claude (or your preferred AI assistant) this:
+```
+Please help me install Claude Code. The latest instructions are at https://docs.claude.com/en/docs/claude-code/setup - you should fetch them. Please ask me about what system I use - Windows, WSL, MacOS, Linux, and based on that walk me through. Thanks!
+```
+</details>
+
+
+#### RStudio MCP Extension
+To install the RStudio MCP extension, run the following lines in your RStudio Console:
 ```r
 # Install from GitHub
 install.packages("remotes")
@@ -21,13 +35,13 @@ library("remotes")
 remotes::install_github("zygi/rstudiomcp")
 ```
 
-## Quick Start
+## Per-project Setup
 
 ### Option 1: Auto-load
 
 Use the RStudio Addin: **"Enable Auto-load (per project)"**
 
-This adds `library(rstudiomcp)` to your project's `.Rprofile`, so the server starts automatically when you open the project.
+This adds `library(rstudiomcp)` to your project's `.Rprofile` configuration, so the server starts automatically when you open the project.
 
 ### Option 2: Manual start (For development/testing)
 
@@ -38,18 +52,18 @@ start_mcp_server()
 
 ## Usage with Claude Code
 
-1. Start the MCP server in RStudio (automatically creates `.mcp.json`)
-2. Open the project folder in Claude Code
-3. Claude Code auto-detects the MCP server via `.mcp.json`
+1. Start the MCP server in RStudio
+2. Open Claude Code inside the project folder (from either the integrated RStudio terminal, or external terminal)
+3. Claude Code should automatically detect the server and connect to it! You can verify that by typing `/mcp` and looking at the details.
 
 You can now ask Claude Code to interact with your R session!
 
-## Troubleshooting
+## Simple Troubleshooting
 
 If you're having problems setting this up, paste the following into Claude:
 ```
 Hi! I'm trying to set up RStudio-MCP to use with a Claude Code session but it's not working.
-Could you please help me debug? The project readme is at https://github.com/zygi/rstudiomcp/README.md
+Could you please help me debug? The project readme is at https://github.com/zygi/rstudiomcp/blob/master/README.md
 (but maybe fetch it as a raw file.)
 ```
 
@@ -59,7 +73,7 @@ Claude Code can use these tools:
 
 ### Code Execution
 - `eval_r` - Execute R code in the R session
-- `source_active_document` - Run the currently active R script (like clicking Source button)
+- `source_active_document` - Run the currently active R script (like clicking Source button). Optional: specify `start_line` and `end_line` to source only specific lines
 
 ### Environment Inspection
 - `list_environments` - List available R environments
@@ -69,9 +83,9 @@ Claude Code can use these tools:
 
 ### Document Editing
 > **Note**: All document editing tools work on the currently active document only.
-> Use `create_untitled_document` to create new docs or `open_document_file` to open saved files.
+> Use `create_document` to create new docs or `open_document_file` to open saved files.
 
-- `create_untitled_document` - Create a new untitled document (becomes active automatically)
+- `create_document` - Create a new document with optional file path (becomes active automatically)
 - `open_document_file` - Open or refocus a saved document file by path
 - `get_active_document` - Read the active document (shows ID, path, and contents)
 - `insert_text` - Insert text at cursor or specific location in the active document
@@ -95,7 +109,7 @@ Or use the RStudio Addin: **"MCP Server Status"**
 configure_mcp_server()
 ```
 
-Default port is **16731**.
+Default port is **16751**.
 
 ### Restart Server
 ```r
@@ -112,7 +126,7 @@ disable_autoload()
 Or use the RStudio Addin: **"Disable Auto-load (per project)"**
 
 
-## Troubleshooting
+## Technical Troubleshooting
 
 ### "Address already in use"
 The port is occupied. Restart the server:
@@ -137,8 +151,8 @@ restart_mcp_server()
 
 See `CLAUDE.md` for developer notes and architecture details.
 Once the server is up, you can also use MCP Inspector for debugging:
-```
-TODO insert command
+```bash
+npx @modelcontextprotocol/inspector http://localhost:16751/
 ```
 
 ## Technical Details
@@ -148,7 +162,7 @@ TODO insert command
 - Once you start Claude Code, it sees this file and attempts to connect to the MCP server.
 
 ### Notes:
-- To allow the MCP access what's on the panel, the server needs to wrap the `viewer` function. This is obviously hacky, I haven't seen it break anything yet but please report if you find it a real problem.
+- To allow MCP to access what's on the Viewer panel, the server needs to wrap the `viewer` function. This is obviously hacky, I haven't seen it break anything yet but please report if you find it a real problem.
 
 
 

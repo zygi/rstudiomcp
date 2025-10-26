@@ -12,6 +12,7 @@ repos:
           - shiny
           - miniUI
           - base64enc
+          - glue
       - id: lintr
         args: [--warn_only]
       - id: parsable-R
