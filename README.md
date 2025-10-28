@@ -75,9 +75,21 @@ start_mcp_server()
 
 1. Start the MCP server in RStudio
 2. Open Claude Code inside the project folder (from either the integrated RStudio terminal, or external terminal)
-3. Claude Code should automatically detect the server and connect to it! You can verify that by typing `/mcp` and looking at the details.
+> [!IMPORTANT]
+> For easy setup, you should open Claude Code inside the same folder that RStudio uses as project home. (This might not be the same as the "active directory" you set in the RStudio filesystem pane.) If in doubt, look inside the RStudio console for the log message `Added RStudio MCP server to <path>/.mcp.json` - this means Claude Code will automatically connect if you start it inside `<path>`.
+3. Claude Code should automatically detect the server and connect to it! You should verify that by typing `/mcp` and looking at the details. 
 
 You can now ask Claude Code to interact with your R session!
+
+## Concurrent sessions
+
+Concurrent sessions - having two RStudio windows open, both with RStudio MCP servers running - currently aren't supported out of the box.
+A somewhat manual way to achieve this is to NOT activate auto-load, and instead load the servers manually in the sessions by providing different ports:
+```
+library(rstudiomcp)
+start_mcp_server(port=12345)
+```
+in one session, and `start_mcp_server(port=12346)` in another. Then start two Claude Code sessions, in the corresponding RStudio project paths, and they should just connect!
 
 ## Simple Troubleshooting
 
